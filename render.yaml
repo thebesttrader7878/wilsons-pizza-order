@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: wilsons-pizza-grill
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: OWNER_EMAIL
+        value: wilsonspizzaandgrill@gmail.com
+      - key: OWNER_PASSWORD
+        sync: false
+      - key: ORDER_WEBHOOK_URL
+        sync: false
