@@ -48,7 +48,7 @@
 
   // ---------- views ----------
   const header = () => `<header class="top"><div class="wrap"><a class="brand" href="#/" aria-label="Wilson's Pizza &amp; Grill home"><img class="logo" src="/img/logo.png" alt="Wilson's Pizza &amp; Grill logo" data-testid="logo"><span class="bname" data-testid="bizname">Wilson's<b>Pizza &amp; Grill</b></span></a><span class="grow"></span>
-    <a class="toplink hide-s" href="#c-pizza">Menu</a><a class="toplink hide-s" href="#visit">Visit</a>
+    <a class="toplink hide-s" href="#menu">Order</a><a class="toplink hide-s" href="#visit">Visit</a>
     <button class="cartbtn" data-act="cart" data-testid="cartbtn" aria-label="Cart">🛒 <span class="hide-s">Cart</span><b data-testid="cartcount" class="${count() ? 'bump' : ''}">${count()}</b></button></div></header>`;
 
   // Branded fallback for items with no photo: brand color, item name, soft-serve swirl motif.
@@ -57,15 +57,19 @@
     return `<div class="fb ${big ? 'big' : ''}" style="--a:${a};--b:${b}"><span class="swirl">🍕</span><span class="fbn">${esc(it.name)}</span><span class="fbt">Wilson's</span></div>`; };
   const photo = (it, cls = 'ph') => it.image ? `<div class="${cls}" style="background-image:url('/${it.image}')"></div>` : `<div class="${cls} nophoto">${fallback(it)}</div>`;
 
+  const hasRequired = it => (it.modifiers || []).some(g => g.required);
   const itemCard = (id, popular) => { const it = item(id); if (!it || it.hidden) return ''; const so = it.soldOut;
-    return `<button class="item ${popular ? 'popc' : ''} ${so ? 'sold' : ''}" data-act="open" data-id="${id}" data-testid="item-${id}" ${so ? 'disabled' : ''}>
-      ${photo(it)}<span class="plus" aria-hidden="true">+</span>${DDR[id] ? `<span class="rate">👍 ${DDR[id]}</span>` : ''}
-      <div class="t"><h4>${esc(it.name)}</h4>${popular ? '' : `<p>${esc(it.description)}</p>`}<div class="pr">${fromPrice(it) > it.price ? 'From ' + m(fromPrice(it)) : m(it.price)} ${so ? '<span class="badge">Sold out</span>' : ''}</div></div></button>`; };
+    return `<div class="item ${popular ? 'popc' : ''} ${so ? 'sold' : ''}" data-testid="item-${id}">
+      <button class="item-open" data-act="open" data-id="${id}" ${so ? 'disabled' : ''} aria-label="${esc(it.name)}">${photo(it)}
+      <div class="t"><h4>${esc(it.name)}</h4>${popular ? '' : `<p>${esc(it.description)}</p>`}<div class="pr">${fromPrice(it) > it.price ? 'From ' + m(fromPrice(it)) : m(it.price)} ${so ? '<span class="badge">Sold out</span>' : ''}</div></div></button>
+      ${DDR[id] ? `<span class="rate">👍 ${DDR[id]}</span>` : ''}
+      ${so ? '' : `<button type="button" class="plus" data-act="quickadd" data-id="${id}" aria-label="Add ${esc(it.name)}">+</button>`}
+      </div>`; };
 
-  const directBox = () => `<section class="direct reveal" data-testid="whydirect"><div><span class="kicker">Why order direct?</span><h2>Skip the app. Order from us.</h2></div><ul>
-    <li><span>🏡</span><div><b>Support a local spot.</b> Your order goes straight to a Quindaro favorite since 1993, not a big app.</div></li>
-    <li><span>⚡</span><div><b>Faster pickup.</b> Your order hits Wilson's kitchen right away, so it's hot and ready when you pull up.</div></li>
-    <li><span>📞</span><div><b>Straight from Wilson's.</b> Questions or special requests? You're talking to the folks making your food.</div></li></ul></section>`;
+  const directBox = () => `<section class="direct reveal" data-testid="whydirect"><div><span class="kicker">Carryout made easy</span><h2>Order ahead. Pick up at Wilson's.</h2></div><ul>
+    <li><span>🛒</span><div><b>Order online in minutes.</b> Build your bag here, pay, and you're on the list — no phone tag.</div></li>
+    <li><span>⚡</span><div><b>Hot when you arrive.</b> Your order hits the kitchen right away, ready in about ${settings().pickupMins} min.</div></li>
+    <li><span>📍</span><div><b>Pickup at Quindaro.</b> 1801 Quindaro Blvd. Support a local favorite since 1993.</div></li></ul></section>`;
 
   const cartLines = (editable = true) => S.cart.length ? S.cart.map((l, i) => `<div class="line"><div class="grow"><b>${l.qty} × ${esc(l.name)}</b>${l.mods.length ? `<small>${esc(l.mods.join(', '))}</small>` : ''}${l.note ? `<small>Note: ${esc(l.note)}</small>` : ''}
     ${editable ? `<div style="display:flex;gap:6px;margin-top:6px"><button class="btn ghost sm" data-act="dec" data-i="${i}" aria-label="less">−</button><button class="btn ghost sm" data-act="inc" data-i="${i}" aria-label="more">+</button><button class="btn ghost sm" data-act="rm" data-i="${i}">Remove</button></div>` : ''}</div><b>${m(l.unit * l.qty)}</b></div>`).join('') : '<p class="fine">Your cart is empty. Go grab a pizza. 🍕</p>';
@@ -78,7 +82,7 @@
   const mosaic = () => { const its = HERO.map(item).filter(x => x && x.image && !x.hidden);
     return `<div class="mosaic" data-testid="hero-photos">${its.map((it, i) => `<button class="tile t${i}" data-act="open" data-id="${it.id}" style="background-image:url('/${it.image}')" aria-label="${esc(it.name)}"><span>${esc(it.name) + ' · ' + m(it.price)}</span></button>`).join('')}</div>`; };
   const ddBtn = (s, where) => `<a class="btn dd" href="${esc(s.doordashUrl)}" target="_blank" rel="noopener" data-testid="dd-${where}">🚗 Want delivery? Order on DoorDash</a>`;
-  const CATICON = { beverages: '🥤', deserts: '🍰', fish: '🐟', 'combo-deals': '⭐', tshirts: '🧢', chicken: '🍗' };
+  const CATICON = { beverages: '🥤', deserts: '🍰', fish: '🐟', 'combo-deals': '⭐', tshirts: '🧢', chicken: '🍗', 'take-bake': '📦' };
   const catTiles = cats => `<section class="cats reveal" data-testid="cattiles"><div class="sech"><span class="kicker">Browse</span><h2>What are you craving?</h2></div><div class="ctiles">${cats.map(c => { const ph = c.items.map(item).find(x => x && x.image && !x.hidden);
     return `<a class="ctile ${ph ? '' : 'noimg'}" href="#c-${c.id}" ${ph ? `style="background-image:url('/${ph.image}')"` : ''}>${ph ? '' : `<i>${CATICON[c.id] || '🍔'}</i>`}<span>${esc(c.name)}<small>${c.items.length} item${c.items.length === 1 ? "" : "s"}</small></span></a>`; }).join('')}</div></section>`;
   const store = () => { const s = settings(), open = openNow(s);
@@ -86,34 +90,42 @@
     const q = S.q.toLowerCase(), tel = s.phone.replace(/\D/g, ''), map = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent("Wilson's Pizza & Grill " + s.address);
     return header() + `<section class="hero"><div class="wrap">${mosaic()}<div class="hcopy">
       <img class="hlogo" src="/img/logo.png" alt="Wilson's Pizza &amp; Grill" data-testid="hero-logo">
-      <p class="hname" data-testid="hero-name">Famous Gourmet Pizza</p>
-      <div class="chips"><span class="chip ${open && s.acceptOrders ? 'open' : 'closed'}" data-testid="openchip"><i class="dot"></i>${open && s.acceptOrders ? 'Open now' : 'Closed, order ahead'}</span><span class="chip">🕙 ${todayHours(s)}</span><span class="chip">📍 Quindaro, KCK</span></div>
-      <h1>Gourmet pizza.<br>Big burgers.<br><em>Since 1993.</em></h1>
-      <p>Quindaro's hidden gem at ${esc(s.address.split(',')[0])}. Order ahead and it's hot when you pull up.</p>
-      <div class="ctas"><a class="btn y xl" href="#c-pizza" data-act="tomenu" data-testid="order-pickup">Order pickup <span class="arrow">→</span></a><span class="chip pick">🛍️ Ready in ~${s.pickupMins} min</span></div>
+      <p class="hname" data-testid="hero-name">Order ahead for pickup</p>
+      <div class="chips"><span class="chip ${open && s.acceptOrders ? 'open' : 'closed'}" data-testid="openchip"><i class="dot"></i>${open && s.acceptOrders ? 'Open now · accepting orders' : 'Kitchen closed · still order ahead'}</span><span class="chip">🕙 ${todayHours(s)}</span><span class="chip">📍 Quindaro, KCK</span></div>
+      <h1>Order online.<br>Pick up hot.<br><em>Skip the wait.</em></h1>
+      <p>Place your carryout order now at ${esc(s.address.split(',')[0])}. We start it when you order — ready in about ${s.pickupMins} min when you pull up.</p>
+      <div class="ctas"><a class="btn y xl" href="#menu" data-act="tomenu" data-testid="order-pickup">Start carryout order <span class="arrow">→</span></a><span class="chip pick">🛍️ Pickup only · ~${s.pickupMins} min</span></div>
       ${ddBtn(s, 'hero')}</div></div></section>
       <section class="proof wrap reveal" data-testid="proof"><div><b>#100</b><span>Best Pizza in America, The Daily Meal</span></div><div><b>4.4★</b><span>on DoorDash from 2,000+ ratings</span></div><div><b>1993</b><span>serving Quindaro since</span></div><div><b>📍</b><span>Right on Quindaro Blvd in KCK</span></div></section>
-      <nav class="catnav" id="menu"><div class="wrap">${cats.map(c => `<a href="#c-${c.id}" data-act="cat" data-c="${c.id}">${esc(c.name)}</a>`).join('')}</div></nav>
+      <nav class="catnav" id="menu"><div class="wrap">${cats.map(c => `<a href="#c-${c.id}" data-act="cat" data-c="${c.id}">${esc(c.name)}</a>`).join('')}</div><i class="catfade" aria-hidden="true"></i></nav>
+      <div class="searchbar"><div class="wrap"><div class="search"><input type="text" placeholder="Search pizza, wings, burgers..." value="${esc(S.q)}" data-in="q" data-testid="search" aria-label="Search the menu"></div></div></div>
       <div class="wrap layout"><main>
+        ${q ? '' : `<section class="sec popsec reveal"><div class="sech"><span class="kicker">Order these for pickup</span><h2>🔥 Most popular</h2></div><div class="pop">${S.menu.popular.map(id => itemCard(id, true)).join('')}</div></section>`}
         ${q ? '' : catTiles(cats)}
-        <div class="search"><input type="text" placeholder="Search pizza, wings, burgers..." value="${esc(S.q)}" data-in="q" data-testid="search" aria-label="Search the menu"></div>
-        ${q ? '' : `<section class="sec reveal"><div class="sech"><span class="kicker">Fan favorites</span><h2>🔥 Most popular</h2></div><div class="pop">${S.menu.popular.map(id => itemCard(id, true)).join('')}</div></section>`}
         ${q ? '' : directBox()}
         ${cats.map(c => { const ids = c.items.filter(id => { const it = item(id); return it && !it.hidden && (!q || (it.name + ' ' + it.description).toLowerCase().includes(q)); }); if (!ids.length) return '';
-          const note = '';
-          return `<section class="sec" id="c-${c.id}"><div class="sech"><h2>${esc(c.name)}</h2>${note ? `<p class="note">${note}</p>` : ''}</div><div class="grid">${ids.map(id => itemCard(id)).join('')}</div></section>`; }).join('')}
+          const note = c.id === 'take-bake' ? 'Ships nationwide. Pizzas arrive cold and fresh — bake at home when you\'re ready. Pickup kitchen items are in the other menu sections.' : '';
+          return `<section class="sec" id="c-${c.id}"><div class="sech"><h2>${esc(c.name)}</h2>${note ? `<p class="note shipnote">${note}</p>` : ''}</div><div class="grid">${ids.map(id => itemCard(id)).join('')}</div></section>`; }).join('')}
         <section class="visit reveal" id="visit" data-testid="visit"><div><span class="kicker">Come see us</span><h2>Hours & location</h2>
           <p class="addr">${esc(s.address)}</p><div class="vbtns"><a class="btn dark" href="${map}" target="_blank" rel="noopener" data-testid="maplink">📍 Get directions</a><a class="btn ghost" href="tel:${tel}">📞 ${esc(s.phone)}</a></div></div>
           <ul class="hours">${s.hours.map((h, i) => `<li class="${i === kc().day ? 'today' : ''}"><span>${DAYS[i]}</span><b>${h.closed ? 'Closed' : fmtT(h.open) + ' to ' + fmtT(h.close)}</b></li>`).join('')}</ul></section>
         <footer class="foot"><b>Wilson's Pizza &amp; Grill</b><span>${esc(s.address)} · <a href="tel:${tel}">${esc(s.phone)}</a></span>
           <span class="fine">Demo ordering site. Payments are simulated test mode, no real money.</span></footer>
-      </main><aside class="side"><div class="card"><h3>Your order</h3>${cartLines()}${S.cart.length ? sumHtml(totals()) + '<a class="btn block" href="#/checkout" data-testid="side-checkout">Checkout</a>' : ''}</div></aside></div>
-      ${count() ? `<a class="btn fab" href="#/checkout" data-testid="fab"><span class="fq">${count()}</span><span>View cart</span><span>${m(totals().subtotal)}</span></a>` : ''}`; };
+      </main><aside class="side"><div class="card"><h3>Your order</h3>${cartLines()}${S.cart.length ? sumHtml(totals()) + '<a class="btn block" href="#/checkout" data-testid="side-checkout">Pay & place pickup order</a>' : ''}</div></aside></div>
+      ${count() ? `<button type="button" class="btn fab" data-act="cart" data-testid="fab"><span class="fq">${count()}</span><span>View order</span><span>${m(totals().subtotal)}</span></button>` : ''}`; };
 
   // ---------- item modal ----------
   let M = null;
   const openItem = id => { const it = item(id); M = { id, qty: 1, sel: {}, note: '' };
-    (it.modifiers || []).forEach(g => { M.sel[g.id] = []; });
+    (it.modifiers || []).forEach(g => {
+      M.sel[g.id] = [];
+      // Required single groups: preselect cheapest option so Add is ready faster
+      if (g.required && g.type === 'single' && g.options && g.options.length) {
+        let best = 0;
+        for (let i = 1; i < g.options.length; i++) if ((+g.options[i].price || 0) < (+g.options[best].price || 0)) best = i;
+        M.sel[g.id] = [best];
+      }
+    });
     renderModal(); };
   const modalValid = it => (it.modifiers || []).every(g => !g.required || (M.sel[g.id] || []).length >= Math.max(1, g.min || 0));
   const fromPrice = it => it.price + (it.modifiers || []).filter(x => x.required && x.type === 'single' && x.options.length).reduce((s, x) => s + Math.min(...x.options.map(o => +o.price || 0)), 0);
@@ -126,30 +138,74 @@
         ${g.options.map((o, oi) => `<label class="opt"><input type="${g.type === 'single' ? 'radio' : 'checkbox'}" name="g_${g.id}" data-g="${g.id}" data-oi="${oi}" ${(M.sel[g.id] || []).includes(oi) ? 'checked' : ''} data-testid="opt-${g.id}-${oi}"><span>${esc(o.name)}</span>${o.price ? (it.price ? '+' : '') + m(o.price) : ''}</label>`).join('')}</div>`).join('')}
       <label class="f">Special requests<textarea rows="2" data-in="note" placeholder="No onions, extra pickles...">${esc(M.note)}</textarea></label></div>
       <div class="sbar"><div class="qty"><button data-act="mq" data-d="-1" aria-label="less">−</button><b data-testid="mqty">${M.qty}</b><button data-act="mq" data-d="1" aria-label="more">+</button></div>
-      <button class="btn grow" data-act="add" data-testid="addtocart" ${ok ? '' : 'disabled'}>${ok ? 'Add to order · ' + m(unit * M.qty) : 'Pick the required options'}</button></div></div>`; };
+      <button class="btn grow" data-act="add" data-testid="addtocart" ${ok ? '' : 'disabled'}>${ok ? 'Add to order · ' + m(unit * M.qty) : 'Pick the required options'}</button></div></div>`;
+    bindSheetSwipe(); };
   let modalY = 0;
+  const bindSheetSwipe = () => {
+    const sheet = document.querySelector('#modal .sheet'); if (!sheet) return;
+    const zone = sheet.querySelector('.grab') || sheet.querySelector('.img') || sheet;
+    let sy = 0, dy = 0, tracking = false;
+    const onStart = e => { if (sheet.scrollTop > 2) return; tracking = true; sy = e.touches[0].clientY; dy = 0; sheet.classList.add('dragging'); };
+    const onMove = e => { if (!tracking) return; dy = e.touches[0].clientY - sy; if (dy > 0) { sheet.style.transform = 'translateY(' + dy + 'px)'; if (e.cancelable) e.preventDefault(); } };
+    const onEnd = () => { if (!tracking) return; tracking = false; sheet.classList.remove('dragging');
+      if (dy > 110) { sheet.style.transform = ''; closeModal(); }
+      else { sheet.style.transition = 'transform .25s var(--ease, ease)'; sheet.style.transform = ''; setTimeout(() => { sheet.style.transition = ''; }, 260); }
+      sy = 0; dy = 0; };
+    zone.addEventListener('touchstart', onStart, { passive: true });
+    sheet.addEventListener('touchmove', onMove, { passive: false });
+    sheet.addEventListener('touchend', onEnd);
+    sheet.addEventListener('touchcancel', onEnd);
+  };
   const closeModal = () => { $('#modal').hidden = true; $('#modal').innerHTML = ''; document.body.style.overflow = ''; M = null; keepY(modalY); };
   const addToCart = () => { const it = item(M.id), mods = []; (it.modifiers || []).forEach(g => (M.sel[g.id] || []).forEach(oi => { const o = g.options[oi]; if (o && !(o.price === 0 && /^No /.test(o.name))) mods.push(o.name); }));
-    S.cart.push({ id: M.id, name: it.name, qty: M.qty, unit: lineUnit(it, M.sel), mods, sel: JSON.parse(JSON.stringify(M.sel)), note: M.note.trim() }); saveCart(); closeModal(); toast('Added ' + it.name); track('addtocart'); render(); };
+    S.cart.push({ id: M.id, name: it.name, qty: M.qty, unit: lineUnit(it, M.sel), mods, sel: JSON.parse(JSON.stringify(M.sel)), note: M.note.trim() }); saveCart(); closeModal(); toast('Added ' + it.name); track('addtocart'); render(); pulseCart(); };
+
+  // ---------- quick add + cart drawer ----------
+  let cartOpen = false, drawerY = 0;
+  const emptySel = it => { const sel = {}; (it.modifiers || []).forEach(g => { sel[g.id] = []; }); return sel; };
+  const quickAdd = id => { const it = item(id); if (!it || it.soldOut || it.hidden) return;
+    if (hasRequired(it)) { openItem(id); return; }
+    const sel = emptySel(it);
+    S.cart.push({ id, name: it.name, qty: 1, unit: lineUnit(it, sel), mods: [], sel, note: '' });
+    saveCart(); toast('Added ' + it.name); track('addtocart'); render(); pulseCart(); };
+  const pulseCart = () => { requestAnimationFrame(() => {
+    document.querySelectorAll('[data-testid=cartcount], .fab .fq').forEach(el => { el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); });
+    const fab = document.querySelector('.fab'); if (fab) { fab.classList.add('pulse'); setTimeout(() => fab.classList.remove('pulse'), 480); }
+  }); };
+  const openCart = () => { drawerY = window.scrollY; cartOpen = true; renderCartDrawer(); document.body.classList.add('drawer-open'); };
+  const closeCart = () => { cartOpen = false; document.body.classList.remove('drawer-open'); const d = $('#drawer'); if (d) { d.hidden = true; d.innerHTML = ''; } keepY(drawerY); };
+  const renderCartDrawer = () => { const d = $('#drawer'); if (!d) return;
+    if (!cartOpen) { d.hidden = true; d.innerHTML = ''; document.body.classList.remove('drawer-open'); return; }
+    const t = totals();
+    d.hidden = false; document.body.classList.add('drawer-open');
+    d.innerHTML = `<div class="drawer-bg" data-act="closecart" aria-hidden="true"></div>
+      <aside class="drawer-panel" role="dialog" aria-label="Your cart" data-testid="cartdrawer">
+        <div class="drawer-grab" aria-hidden="true"></div>
+        <header class="drawer-h"><h3>Your order</h3><button type="button" class="x" data-act="closecart" aria-label="Close cart">×</button></header>
+        <div class="drawer-body">${cartLines(true)}</div>
+        <div class="drawer-foot">${S.cart.length ? sumHtml(t) + `<a class="btn block" href="#/checkout" data-act="closecart" data-testid="drawer-checkout">Pay & place pickup · ${m(t.total)}</a>` : '<a class="btn block ghost" href="#/" data-act="closecart">Browse menu</a>'}</div>
+      </aside>`; };
 
   // ---------- checkout ----------
   const checkout = () => { const s = settings(), t = totals(), c = LS.get('ctq_customer', {});
     if (!S.cart.length) return header() + `<div class="wrap page"><div class="card done"><div class="big">🛒</div><h3>Your cart is empty</h3><a class="btn" href="#/">Back to menu</a></div></div>`;
     const belowMin = false;
-    return header() + `<div class="wrap page" style="max-width:640px"><a href="#/" class="fine">← Keep shopping</a><h1 style="margin:0;font-family:Fredoka">Checkout</h1>
+    return header() + `<div class="wrap page" style="max-width:640px"><a href="#/" class="fine">← Keep shopping</a><h1 style="margin:0;font-family:Abril Fatface,Georgia,serif">Checkout</h1>
       <form id="co" class="page" style="padding:0" data-testid="checkoutform">
-      <div class="card"><h3>Pickup 🛍️</h3><p class="fine" style="margin:0">Pick up at ${esc(s.address)}, ready in about ${s.pickupMins} min.</p>
+      <div class="card"><h3>Carryout pickup 🛍️</h3><p class="fine" style="margin:0">Order ahead and pick up at ${esc(s.address)}. Ready in about ${s.pickupMins} min after you pay.</p>
         <label class="f">When<select name="when" data-testid="co-when"><option value="asap">ASAP</option>${laterSlots(s).map(x => `<option>${x}</option>`).join('')}</select></label>${ddBtn(s, 'checkout')}</div>
       <div class="card"><h3>Your info</h3><label class="f">Name<input type="text" name="name" required autocomplete="name" value="${esc(c.name || '')}" data-testid="co-name"></label>
         <div class="two"><label class="f">Phone<input type="tel" name="phone" required autocomplete="tel" value="${esc(c.phone || '')}" data-testid="co-phone"></label><label class="f">Email<input type="email" name="email" autocomplete="email" value="${esc(c.email || '')}" data-testid="co-email"></label></div>
         <label class="f">Order notes<textarea name="notes" rows="2" placeholder="Anything we should know?"></textarea></label></div>
       <div class="card"><h3>Your order</h3>${cartLines()}</div>
       <div class="card"><h3>Tip the crew</h3><div class="tips">${[0, 10, 15, 20].map(p => { const v = r2(t.subtotal * p / 100); return `<button type="button" class="${S.tip === v ? 'on' : ''}" data-act="tip" data-v="${v}">${p ? p + '%' : 'None'}</button>`; }).join('')}</div></div>
-      <div class="card"><h3>Payment ${liveCard() || hostedCard() || cardOff() ? '' : '<span class="test" data-testid="demo-pay">Demo mode, no real payments</span>'}</h3><div class="seg">${cardOff() ? '' : '<label><input type="radio" name="pay" value="card" checked data-ch="pay"> 💳 Card</label>'}<label><input type="radio" name="pay" value="store" ${cardOff() ? 'checked' : ''} data-ch="pay" data-testid="co-paystore"> 💵 Pay at pickup</label></div>
+      <div class="card"><h3>Pay online ${liveCard() || hostedCard() || cardOff() ? '' : '<span class="test" data-testid="demo-pay">Demo mode, no real payments</span>'}</h3>
+        ${cardOff() ? '<p class="req" data-testid="card-off">Card payments are being set up. Please check back shortly — we only take online card payment for carryout orders.</p>' : '<p class="fine" style="margin:0">Card only. Pay now — pick up at Wilson\'s when it\'s ready. No pay-at-pickup.</p>'}
+        <input type="hidden" name="pay" value="card">
         <div id="cardbox">${cardOff() ? '' : liveCard() ? '<div id="stripe-el" data-testid="stripe-element"></div>' : hostedCard() ? '<p class="fine" data-testid="hosted-card">🔒 You\'ll enter your card on Stripe\'s secure checkout page, then come right back here.</p>' : `<label class="f">Card number<input type="text" name="card" inputmode="numeric" value="4242 4242 4242 4242" data-testid="co-card"></label><div class="two"><label class="f">Exp<input type="text" name="exp" value="12/30"></label><label class="f">CVC<input type="text" name="cvc" value="123"></label></div><p class="fine">Demo mode. Use 4242 4242 4242 4242. Nothing is charged.</p>`}</div>
         <div id="payerr" class="req" hidden></div>
         ${sumHtml(t)}
-        <button class="btn block" data-testid="placeorder" ${belowMin || !s.acceptOrders ? 'disabled' : ''}>${s.acceptOrders ? 'Place order · ' + m(t.total) : 'Not taking online orders right now'}</button></div>
+        <button class="btn block" data-testid="placeorder" ${belowMin || !s.acceptOrders || cardOff() ? 'disabled' : ''}>${!s.acceptOrders ? 'Not taking online orders right now' : cardOff() ? 'Card payments not available yet' : 'Pay & place pickup order · ' + m(t.total)}</button></div>
       </form></div>`; };
   const laterSlots = s => { const h = s.hours[new Date().getDay()]; if (h.closed) return []; const out = []; const d = new Date(); d.setMinutes(Math.ceil((d.getMinutes() + 30) / 15) * 15, 0, 0); for (let i = 0; i < 24; i++) { const t = d.toTimeString().slice(0, 5); if (t >= h.open && t < h.close) out.push('Today ' + fmtT(t)); d.setMinutes(d.getMinutes() + 15); } return out; };
 
@@ -166,8 +222,9 @@
     const fail = m => { err.textContent = m; err.hidden = false; btn.disabled = false; };
     btn.disabled = true;
     let payment;
-    if (d.pay === 'store') payment = { method: 'store' };
-    else if (liveCard()) {
+    // Online card only — pay-at-pickup / cash removed
+    if (d.pay === 'store') return fail('We only take online card payment for carryout orders.');
+    if (liveCard()) {
       if (!SE) return fail('Card form is still loading.');
       const sub = await SE.els.submit(); if (sub.error) return fail(sub.error.message);
       const ir = await (await fetch('/api/checkout/intent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: S.cart, tip: S.tip }) })).json();
@@ -181,7 +238,7 @@
       let cr; try { cr = await (await fetch('/api/checkout/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: S.cart, tip: S.tip }) })).json(); } catch (e) { return fail('Could not reach us. Check your connection and try again.'); }
       if (!cr.ok) return fail(cr.error || 'Card payment is not available right now.');
       location.href = cr.url; return;
-    } else if (cardOff()) { return fail('Card payments are not set up yet. Choose pay at pickup.');
+    } else if (cardOff()) { return fail('Card payments are not set up yet. Please try again later.');
     } else { const pay = PAY.charge({ amount: t.total, method: 'card', card: d.card }); if (!pay.ok) return fail(pay.error); payment = { method: 'card', id: pay.id, last4: pay.last4 }; }
     LS.set('ctq_customer', { name: d.name, phone: d.phone, email: d.email });
     const body = { sid: SID, when: d.when, customer: { name: d.name, phone: d.phone, email: d.email }, notes: d.notes || '', tip: S.tip, payment, items: S.cart.map(l => ({ id: l.id, qty: l.qty, mods: l.mods, sel: l.sel, note: l.note })) };
@@ -236,19 +293,21 @@
     const route = h.split('?')[0], sameRoute = route === lastRoute, y = window.scrollY; lastRoute = route;
     $('#app').innerHTML = html;
     reveal(); if (sameRoute) keepY(y);
-    mountStripe(); watchMenu();
+    mountStripe(); watchMenu(); spyCats(); renderCartDrawer();
     const nf = $('#co'); if (keep && nf) keep.forEach(([k, v]) => { const x = nf.elements[k]; if (x && x.type !== 'radio' && x.tagName !== 'BUTTON') x.value = v; }); };
   window.addEventListener('hashchange', () => { if (!/^#c-|^#menu/.test(location.hash)) { const was = lastRoute; render(); if (lastRoute !== was) keepY(0); } });
 
   document.addEventListener('click', e => { const el = e.target.closest('[data-act]'); if (!el) { if (e.target.id === 'modal') closeModal(); return; } const a = el.dataset.act, s = settings();
     if (el.tagName === 'BUTTON' && el.type === 'submit') e.preventDefault(); // action buttons inside the checkout form must not submit it
     if (a === 'open') openItem(el.dataset.id); else if (a === 'close') closeModal(); else if (a === 'add') addToCart();
+    else if (a === 'quickadd') { e.preventDefault(); e.stopPropagation(); quickAdd(el.dataset.id); }
     else if (a === 'mq') { M.qty = Math.max(1, M.qty + +el.dataset.d); renderModal(); }
     else if (a === 'mode') { S.mode = el.dataset.v; saveCart(); render(); }
-    else if (a === 'cart') { location.hash = '#/checkout'; }
+    else if (a === 'cart') { e.preventDefault(); openCart(); }
+    else if (a === 'closecart') { if (el.tagName === 'A' && el.getAttribute('href') === '#/checkout') { closeCart(); return; } e.preventDefault(); closeCart(); }
     else if (a === 'inc' || a === 'dec' || a === 'rm') { const l = S.cart[+el.dataset.i]; if (a === 'inc') l.qty++; else if (a === 'dec') l.qty--; if (a === 'rm' || l.qty < 1) S.cart.splice(+el.dataset.i, 1); saveCart(); render(); }
     else if (a === 'tip') { S.tip = +el.dataset.v; render(); }
-    else if (a === 'cat') { document.querySelectorAll('.catnav a').forEach(x => x.classList.toggle('on', x === el)); }
+    else if (a === 'cat') { document.querySelectorAll('.catnav a').forEach(x => x.classList.toggle('on', x === el)); setTimeout(() => { const wrap = document.querySelector('.catnav .wrap'); if (!wrap) return; const left = el.offsetLeft - (wrap.clientWidth - el.clientWidth) / 2; wrap.scrollTo({ left: Math.max(0, left), behavior: 'smooth' }); }, 0); }
   });
   document.addEventListener('change', e => { const el = e.target;
     if (el.dataset.g && M) { const g = item(M.id).modifiers.find(x => x.id === el.dataset.g), oi = +el.dataset.oi; if (g.type === 'single') M.sel[g.id] = (M.sel[g.id] || [])[0] === oi && !g.required ? [] : [oi]; else { const s = M.sel[g.id] || []; if (el.checked && g.max && s.length >= g.max) { el.checked = false; toast('Pick up to ' + g.max); return; } M.sel[g.id] = el.checked ? s.concat(oi) : s.filter(x => x !== oi); } renderModal(); }
@@ -259,12 +318,63 @@
   document.addEventListener('submit', e => { e.preventDefault(); const f = e.target;
     if (f.id === 'co') placeOrder(f);
   });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && M) closeModal(); });
+  document.addEventListener('keydown', e => { if (e.key !== 'Escape') return; if (M) closeModal(); else if (cartOpen) closeCart(); });
 
   window.CTQ = { totals, lineUnit, openNow };
   let menuObs = null;
   const watchMenu = () => { const el = $('#menu'); if (!el || sent.menuview) return; if (!('IntersectionObserver' in window)) return; if (menuObs) menuObs.disconnect();
     menuObs = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) { track('menuview', true); menuObs.disconnect(); } }); menuObs.observe(el); };
+  let catObs = null, spyId = '', spyRaf = 0;
+  const setCatOn = id => {
+    if (!id || id === spyId) return; spyId = id;
+    const wrap = document.querySelector('.catnav .wrap');
+    document.querySelectorAll('.catnav a[data-c]').forEach(a => {
+      const on = a.dataset.c === id; a.classList.toggle('on', on);
+      if (on && wrap) {
+        // Horizontal only — scrollIntoView(block) was yanking the page vertically.
+        const left = a.offsetLeft - (wrap.clientWidth - a.clientWidth) / 2;
+        wrap.scrollTo({ left: Math.max(0, left), behavior: 'smooth' });
+      }
+    });
+  };
+  const stickyOffset = () => {
+    const top = document.querySelector('.top');
+    const nav = document.querySelector('.catnav');
+    const search = document.querySelector('.searchbar');
+    return (top ? top.offsetHeight : 64) + (nav ? nav.offsetHeight : 50) + (search ? search.offsetHeight : 0) + 8;
+  };
+  const pickCat = () => {
+    const secs = [...document.querySelectorAll('main section.sec[id^="c-"]')];
+    if (!secs.length) return;
+    const y = stickyOffset();
+    let best = secs[0], bestDist = Infinity;
+    secs.forEach(s => {
+      const top = s.getBoundingClientRect().top;
+      const dist = Math.abs(top - y);
+      // Prefer the section whose top has crossed / is nearest the sticky line
+      if (top - y <= 24 && (y - top) < bestDist) { bestDist = y - top; best = s; }
+    });
+    // If none crossed yet (still above first section), use nearest below
+    if (bestDist === Infinity) {
+      secs.forEach(s => { const d = s.getBoundingClientRect().top - y; if (d >= -20 && d < bestDist) { bestDist = d; best = s; } });
+    }
+    setCatOn(best.id.replace(/^c-/, ''));
+  };
+  const onSpyScroll = () => { if (spyRaf) return; spyRaf = requestAnimationFrame(() => { spyRaf = 0; pickCat(); }); };
+  const spyCats = () => {
+    if (catObs) { catObs.disconnect(); catObs = null; }
+    window.removeEventListener('scroll', onSpyScroll);
+    spyId = '';
+    const secs = [...document.querySelectorAll('main section.sec[id^="c-"]')];
+    if (!secs.length) return;
+    window.addEventListener('scroll', onSpyScroll, { passive: true });
+    pickCat();
+    // Also keep IO as a light assist when sections enter mid-viewport
+    if ('IntersectionObserver' in window) {
+      catObs = new IntersectionObserver(() => pickCat(), { rootMargin: '-20% 0px -55% 0px', threshold: [0, 0.2, 0.5] });
+      secs.forEach(s => catObs.observe(s));
+    }
+  };
   document.addEventListener('click', e => { if (e.target.closest('[data-act=open],[data-act=tomenu],[data-act=cat]')) track('menuview', true); }, true);
   // Old #/admin links go to the storefront; the owner dashboard lives at /owner.
   if (/^#\/admin/.test(location.hash)) history.replaceState(null, '', location.pathname);

@@ -242,3 +242,92 @@ textarea,input[type=text],input[type=tel],input[type=email],input[type=number],i
 .steps div{background:#2a2a2a}
 .test{background:#3a2c00;color:var(--gold)}
 @media(min-width:760px){.proof{margin-top:18px}.sheet{border-radius:4px}}
+
+
+/* ===== UX upgrade: modern ordering (keep black/gold/red) ===== */
+:root{--r:8px}
+.btn,.btn.xl,.btn.sm,.cartbtn,.catnav a,.tips button,.seg label,.qty,.qty button{border-radius:8px}
+.item,.card,.ctile,.tile,.direct,.visit,.proof div,.sheet,.mg{border-radius:10px}
+.item .ph{border-radius:8px}
+.fab{border-radius:10px}
+.toast{border-radius:10px}
+.search input,textarea,input[type=text],input[type=tel],input[type=email],input[type=number],input[type=password],input[type=time],select{border-radius:8px}
+.btn:focus-visible,.cartbtn:focus-visible,.plus:focus-visible,.catnav a:focus-visible,.item-open:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible,.opt:focus-within{outline:2px solid var(--gold);outline-offset:2px}
+
+/* item card: open button + big quick-add */
+.item{display:grid;grid-template-columns:1fr 118px;grid-template-areas:"t p";gap:12px;padding:12px;position:relative;text-align:left;width:100%;background:#111;border:1px solid #232323}
+.item-open{all:unset;cursor:pointer;display:contents}
+.item-open .t{grid-area:t;display:flex;flex-direction:column;gap:5px;min-width:0;padding:4px 0 2px 4px}
+.item-open .ph,.item-open .nophoto{grid-area:p;width:118px;height:118px}
+.item .plus{position:absolute;right:10px;bottom:10px;width:44px;height:44px;border:0;border-radius:10px;background:var(--red);color:var(--gold);display:grid;place-items:center;font-weight:800;font-size:26px;line-height:1;z-index:3;box-shadow:0 6px 16px rgba(0,0,0,.45);cursor:pointer;transition:transform .15s,background .15s,color .15s}
+.item .plus:hover,.item .plus:active{background:var(--gold);color:#000;transform:scale(1.06)}
+.item .rate{z-index:2}
+.pop .item{grid-template-columns:1fr;grid-template-areas:"p" "t";width:200px;flex:none;scroll-snap-align:start}
+.pop .item-open .ph,.pop .item-open .nophoto{width:100%;height:150px}
+.pop .item .plus{right:10px;bottom:10px;top:auto}
+
+/* sticky search under catnav */
+.searchbar{position:sticky;top:114px;z-index:19;background:rgba(0,0,0,.94);backdrop-filter:blur(10px);border-bottom:1px solid #222;padding:8px 0}
+.searchbar .search{margin:0}
+.searchbar .search input{padding:12px 14px 12px 44px;font-size:15px}
+.sec{scroll-margin-top:180px}
+.popsec{scroll-margin-top:180px;padding-top:16px}
+
+/* catnav fade hint */
+.catnav{position:relative}
+.catnav .catfade{pointer-events:none;position:absolute;top:0;right:0;bottom:0;width:48px;background:linear-gradient(90deg,transparent,rgba(0,0,0,.95));z-index:2}
+.catnav a.on{box-shadow:0 0 0 1px var(--gold)}
+
+/* popular row padding so first/last not clipped */
+.pop{display:flex;gap:12px;overflow-x:auto;padding:4px 4px 18px;margin:0 -4px;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.pop::-webkit-scrollbar{display:none}
+
+/* craving tiles: horizontal snap on mobile */
+.ctiles{display:flex;gap:10px;overflow-x:auto;padding:4px 2px 12px;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.ctiles::-webkit-scrollbar{display:none}
+.ctile{flex:none;width:min(70vw,220px);height:110px;scroll-snap-align:start}
+@media(min-width:760px){
+  .ctiles{display:grid;grid-template-columns:repeat(4,1fr);overflow:visible;padding:0;scroll-snap-type:none}
+  .ctile{width:auto;height:140px}
+  .searchbar{top:114px}
+  .sec,.popsec{scroll-margin-top:180px}
+}
+
+/* sheet overflow + swipe */
+.modal{overflow:hidden}
+.sheet{overflow-x:hidden;overflow-y:auto;max-width:100vw;overscroll-behavior:contain}
+.sheet.dragging{transition:none!important}
+.sheet .bd,.sheet .mg,.opt{max-width:100%;min-width:0}
+.sheet .bd{overflow-x:hidden}
+.sbar{z-index:4}
+.opt{min-height:48px;padding:12px 6px}
+.opt input{width:22px;height:22px;flex:none}
+
+/* FAB pulse */
+.fab.pulse{animation:fabpulse .45s ease}
+@keyframes fabpulse{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
+.fab{width:calc(100% - 24px);border:0;cursor:pointer}
+
+/* cart drawer */
+.drawer{position:fixed;inset:0;z-index:55;display:flex;justify-content:flex-end;align-items:stretch}
+.drawer[hidden]{display:none!important}
+.drawer-bg{position:absolute;inset:0;background:rgba(0,0,0,.62);backdrop-filter:blur(2px);animation:fade .2s}
+.drawer-panel{position:relative;z-index:1;width:min(420px,100%);background:#0d0d0d;border-left:1px solid #2a2a2a;color:#fff;display:flex;flex-direction:column;max-height:100%;animation:drawerIn .3s cubic-bezier(.2,.8,.2,1);box-shadow:-18px 0 40px -20px rgba(0,0,0,.8)}
+@keyframes drawerIn{from{transform:translateX(100%)}}
+.drawer-grab{display:none}
+.drawer-h{display:flex;align-items:center;justify-content:space-between;padding:16px 16px 10px;border-bottom:1px solid #222;flex:none}
+.drawer-h h3{margin:0;font:400 24px var(--disp);color:var(--gold)}
+.drawer-h .x{width:40px;height:40px;border-radius:8px;border:1px solid #444;background:#000;color:#fff;font-size:22px}
+.drawer-body{flex:1;overflow:auto;padding:8px 16px 16px;-webkit-overflow-scrolling:touch}
+.drawer-foot{flex:none;padding:12px 16px max(16px,env(safe-area-inset-bottom));border-top:1px solid #2a2a2a;background:rgba(13,13,13,.98);display:grid;gap:10px}
+body.drawer-open{overflow:hidden}
+@media(max-width:759px){
+  .drawer{align-items:flex-end}
+  .drawer-panel{width:100%;max-height:min(88vh,720px);border-left:0;border-top:1px solid #2a2a2a;border-radius:16px 16px 0 0;animation:drawerUp .32s cubic-bezier(.2,.8,.2,1)}
+  @keyframes drawerUp{from{transform:translateY(100%)}}
+  .drawer-grab{display:block;width:44px;height:5px;border-radius:9px;background:#444;margin:10px auto 0}
+}
+
+/* take & bake section accent */
+#c-take-bake .sech h2,#c-ship-nationwide .sech h2{color:var(--gold)}
+.shipnote{color:var(--mut);font-size:14px;margin:6px 0 0;max-width:52ch}
