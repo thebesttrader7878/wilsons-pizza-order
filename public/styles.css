@@ -471,6 +471,20 @@ body.drawer-open{overflow:hidden}
   }
   .hero .hcopy{min-width:0}
   .hero h1{overflow-wrap:anywhere}
+
+  /* Product TikToks are 9:16. Show the whole frame; black bars are fine. Still photos stay square. */
+  .sheet .img:has(.ph.hasvid){height:auto;background:#000}
+  .sheet .img .ph.hasvid{
+    width:100%;height:auto;aspect-ratio:9/16;
+    background-color:#000;background-size:contain;background-repeat:no-repeat;background-position:center;
+  }
+  .sheet .img:has(.ph.hasvid) .x{z-index:4}
+  .item-open .ph.hasvid{
+    width:118px;height:auto;aspect-ratio:9/16;
+    background-color:#000;background-size:contain;background-repeat:no-repeat;background-position:center;
+  }
+  .pop .item-open .ph.hasvid{width:100%;height:auto;aspect-ratio:9/16}
+  .ph.hasvid .ph-vid{object-fit:contain;background:#000}
 }
 
 @media (min-width:760px){
