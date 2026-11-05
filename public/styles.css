@@ -482,6 +482,29 @@ body.drawer-open{overflow:hidden}
   .sheet .img .ph.hasvid .ph-vid{object-fit:contain;background:#000}
 }
 
+/* Ship-a-pizza pitches: non-local visitors only. Gold so they cannot be missed on the black page. */
+.ship-hero,.ship-banner,.ship-top{text-decoration:none;background:var(--gold);color:#111;border:2px solid #000;box-shadow:0 16px 36px -14px rgba(254,211,82,.9)}
+.ship-top{position:sticky;top:64px;z-index:28;display:flex;align-items:center;gap:10px;padding:10px 16px;border-width:0 0 3px;border-radius:0;box-shadow:none}
+.has-ship .searchbar{top:118px}
+.ship-top b{font-family:var(--disp);font-weight:400;font-size:clamp(22px,6vw,32px);line-height:1;color:#111;white-space:nowrap}
+.ship-top span{flex:1;font:800 12px/1.2 Roboto,sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#6e0800}
+.ship-top em{font-style:normal;font-weight:800;font-size:22px;color:#111}
+.ship-hero{display:grid;gap:4px;padding:16px 16px 14px;border-radius:12px;margin:2px 0 4px}
+.ship-hero .ship-kicker,.ship-banner .ship-kicker{font:800 13px/1.2 Roboto,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#6e0800}
+.ship-hero strong,.ship-banner strong{font-family:var(--disp);font-weight:400;color:#111;line-height:.95}
+.ship-hero strong{font-size:clamp(34px,8vw,48px)}
+.ship-hero>span:last-child{color:#1a1a1a;font-size:14.5px;line-height:1.4;max-width:46ch}
+.ship-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:22px 0 0;padding:16px;border-radius:12px}
+.ship-banner .ship-copy{display:grid;gap:2px;min-width:0}
+.ship-banner strong{font-size:clamp(28px,6vw,40px)}
+.ship-go{flex:none;background:#111;color:var(--gold);font-family:var(--disp);font-size:20px;line-height:1;padding:12px 14px;border-radius:8px}
+.ship-hero:focus-visible,.ship-banner:focus-visible,.ship-top:focus-visible{outline:2px solid #fff;outline-offset:3px}
+@media(max-width:420px){
+  .ship-banner{flex-direction:column;align-items:stretch}
+  .ship-go{text-align:center}
+  .ship-top b{font-size:22px}
+}
+
 @media (min-width:760px){
   .mosaic{
     display:grid;

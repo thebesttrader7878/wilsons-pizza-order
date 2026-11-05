@@ -23,6 +23,7 @@
       "name": "Gourmet Pizza",
       "items": [
         "18th-street-special-regular-crust",
+        "double-decker",
         "chicken-supreme-regular-crust",
         "bbq-chicken-stuffed-crust",
         "sausage-delight-regular-crust",
@@ -798,6 +799,29 @@
         },
         {
           "id": "g875859635",
+          "name": "Extra Cheese",
+          "type": "multi",
+          "required": false,
+          "min": 0,
+          "max": 1,
+          "options": [
+            {
+              "name": "Extra Cheese",
+              "price": 3.0
+            }
+          ]
+        }
+      ]
+    },
+    "double-decker": {
+      "id": "double-decker",
+      "name": "Double Decker",
+      "description": "Two layers in one pie. Pepperoni, sauce, and cheese stacked the Wilson's way.",
+      "price": 38.99,
+      "image": "img/double-decker.jpg",
+      "modifiers": [
+        {
+          "id": "extra-cheese",
           "name": "Extra Cheese",
           "type": "multi",
           "required": false,
@@ -3426,12 +3450,12 @@
       "id": "tb-wilsons-18th-street-special-take-bake",
       "shopifyHandle": "wilsons-18th-street-special-take-bake",
       "name": "Wilson's 18th Street Special - Take & bake",
-      "description": "Wilson's legendary 18th Street Special, take & bake. Arrives cold and fresh — bake at home when you're ready.",
+      "description": "Wilson's legendary 18th Street Special, take and bake. Pick it up at Quindaro and bake at home when you're ready.",
       "price": 14.99,
       "image": "img/takebake/wilsons-18th-street-special-take-bake.jpg",
       "modifiers": [],
-      "shippable": true,
-      "fulfillment": "ship"
+      "shippable": false,
+      "fulfillment": "pickup"
     },
     "tb-wilsons-beef-take-bake": {
       "id": "tb-wilsons-beef-take-bake",
@@ -3441,8 +3465,8 @@
       "price": 14.99,
       "image": "img/takebake/wilsons-beef-take-bake.jpg",
       "modifiers": [],
-      "shippable": true,
-      "fulfillment": "ship"
+      "shippable": false,
+      "fulfillment": "pickup"
     },
     "tb-wilsons-cheese-take-bake": {
       "id": "tb-wilsons-cheese-take-bake",
@@ -3452,19 +3476,19 @@
       "price": 14.99,
       "image": "img/takebake/wilsons-cheese-take-bake.jpg",
       "modifiers": [],
-      "shippable": true,
-      "fulfillment": "ship"
+      "shippable": false,
+      "fulfillment": "pickup"
     },
     "tb-wilsons-just-meat-take-bake": {
       "id": "tb-wilsons-just-meat-take-bake",
       "shopifyHandle": "wilsons-just-meat-take-bake",
       "name": "Wilson's Just Meat - Take & bake",
-      "description": "Wilson's Just Meat take & bake pizza — pepperoni, sausage, ham, and beef on our signature crust. Arrives cold and fresh.",
+      "description": "Wilson's Just Meat take and bake. Pepperoni, sausage, ham, and beef on our signature crust. Pick it up and bake at home.",
       "price": 14.99,
       "image": "img/takebake/wilsons-just-meat-take-bake.jpg",
       "modifiers": [],
-      "shippable": true,
-      "fulfillment": "ship"
+      "shippable": false,
+      "fulfillment": "pickup"
     },
     "tb-wilsons-pepperoni-take-bake": {
       "id": "tb-wilsons-pepperoni-take-bake",
@@ -3474,8 +3498,8 @@
       "price": 14.99,
       "image": "img/takebake/wilsons-pepperoni-take-bake.jpg",
       "modifiers": [],
-      "shippable": true,
-      "fulfillment": "ship"
+      "shippable": false,
+      "fulfillment": "pickup"
     },
     "tb-wilsons-sausage-take-bake": {
       "id": "tb-wilsons-sausage-take-bake",
@@ -3485,8 +3509,8 @@
       "price": 14.99,
       "image": "img/takebake/wilsons-sausage-take-bake.jpg",
       "modifiers": [],
-      "shippable": true,
-      "fulfillment": "ship"
+      "shippable": false,
+      "fulfillment": "pickup"
     },
     "tb-wilsons-veggie-take-bake": {
       "id": "tb-wilsons-veggie-take-bake",
@@ -3496,8 +3520,8 @@
       "price": 14.99,
       "image": "img/takebake/wilsons-veggie-take-bake.jpg",
       "modifiers": [],
-      "shippable": true,
-      "fulfillment": "ship"
+      "shippable": false,
+      "fulfillment": "pickup"
     },
     "tb-pack-veggie-pizzas-triple-veggie-fresh-pack": {
       "id": "tb-pack-veggie-pizzas-triple-veggie-fresh-pack",
@@ -3507,8 +3531,8 @@
       "price": 45.99,
       "image": "img/takebake/pack-veggie-pizzas-triple-veggie-fresh-pack.jpg",
       "modifiers": [],
-      "shippable": true,
-      "fulfillment": "ship"
+      "shippable": false,
+      "fulfillment": "pickup"
     },
     "tb-3-pack-18th-street-special-pizzas-triple-loaded-legend": {
       "id": "tb-3-pack-18th-street-special-pizzas-triple-loaded-legend",
@@ -3518,19 +3542,19 @@
       "price": 45.99,
       "image": "img/takebake/3-pack-18th-street-special-pizzas-triple-loaded-legend.jpg",
       "modifiers": [],
-      "shippable": true,
-      "fulfillment": "ship"
+      "shippable": false,
+      "fulfillment": "pickup"
     },
     "tb-3-pack-beef-pizzas-triple-beef-deal": {
       "id": "tb-3-pack-beef-pizzas-triple-beef-deal",
       "shopifyHandle": "3-pack-beef-pizzas-triple-beef-deal",
       "name": "3-Pack Beef Pizzas - Triple Beef Deal",
-      "description": "Three large 12-inch pizzas generously topped with seasoned ground beef crumbles, plenty of gooey mozzarella cheese, and our signature tangy tomato sauce on handcrafted dough. Bake at 425°F for 12-15 minutes. Ships cold and fresh nationwide.",
+      "description": "Three large 12-inch pizzas generously topped with seasoned ground beef crumbles, plenty of gooey mozzarella cheese, and our signature tangy tomato sauce on handcrafted dough. Pick it up, then bake at 425°F for 12-15 minutes.",
       "price": 45.99,
       "image": "img/takebake/3-pack-beef-pizzas-triple-beef-deal.jpg",
       "modifiers": [],
-      "shippable": true,
-      "fulfillment": "ship"
+      "shippable": false,
+      "fulfillment": "pickup"
     },
     "tb-wilsons-take-bake-3-pack-family-deal": {
       "id": "tb-wilsons-take-bake-3-pack-family-deal",
@@ -3540,8 +3564,8 @@
       "price": 45.99,
       "image": "img/takebake/wilsons-take-bake-3-pack-family-deal.jpg",
       "modifiers": [],
-      "shippable": true,
-      "fulfillment": "ship"
+      "shippable": false,
+      "fulfillment": "pickup"
     },
     "tb-3-pack-just-meat-pizzas-triple-meat-overload": {
       "id": "tb-3-pack-just-meat-pizzas-triple-meat-overload",
@@ -3551,8 +3575,8 @@
       "price": 45.99,
       "image": "img/takebake/3-pack-just-meat-pizzas-triple-meat-overload.jpg",
       "modifiers": [],
-      "shippable": true,
-      "fulfillment": "ship"
+      "shippable": false,
+      "fulfillment": "pickup"
     },
     "tb-3-pack-pepperoni-pizzas-triple-pepperoni-pack": {
       "id": "tb-3-pack-pepperoni-pizzas-triple-pepperoni-pack",
@@ -3562,8 +3586,8 @@
       "price": 45.99,
       "image": "img/takebake/3-pack-pepperoni-pizzas-triple-pepperoni-pack.jpg",
       "modifiers": [],
-      "shippable": true,
-      "fulfillment": "ship"
+      "shippable": false,
+      "fulfillment": "pickup"
     },
     "tb-3-pack-sausage-delight-pizzas-triple-sausage-delight": {
       "id": "tb-3-pack-sausage-delight-pizzas-triple-sausage-delight",
@@ -3573,8 +3597,8 @@
       "price": 45.99,
       "image": "img/takebake/3-pack-sausage-delight-pizzas-triple-sausage-delight.jpg",
       "modifiers": [],
-      "shippable": true,
-      "fulfillment": "ship"
+      "shippable": false,
+      "fulfillment": "pickup"
     },
     "tb-3-pack-sausage-pizzas-triple-sausage-deal": {
       "id": "tb-3-pack-sausage-pizzas-triple-sausage-deal",
@@ -3584,8 +3608,8 @@
       "price": 45.99,
       "image": "img/takebake/3-pack-sausage-pizzas-triple-sausage-deal.jpg",
       "modifiers": [],
-      "shippable": true,
-      "fulfillment": "ship"
+      "shippable": false,
+      "fulfillment": "pickup"
     },
     "tb-3-pack-sampler-deal": {
       "id": "tb-3-pack-sampler-deal",
@@ -3595,8 +3619,8 @@
       "price": 14.99,
       "image": "img/takebake/3-pack-sampler-deal.jpg",
       "modifiers": [],
-      "shippable": true,
-      "fulfillment": "ship"
+      "shippable": false,
+      "fulfillment": "pickup"
     },
     "tb-wilson-s-triple-delight-take-bake-variety-pack": {
       "id": "tb-wilson-s-triple-delight-take-bake-variety-pack",
@@ -3606,8 +3630,8 @@
       "price": 45.99,
       "image": "img/takebake/wilson-s-triple-delight-take-bake-variety-pack.jpg",
       "modifiers": [],
-      "shippable": true,
-      "fulfillment": "ship"
+      "shippable": false,
+      "fulfillment": "pickup"
     },
     "tb-kansas-city-special-4-pack-pizza-deal": {
       "id": "tb-kansas-city-special-4-pack-pizza-deal",
@@ -3617,8 +3641,8 @@
       "price": 59.99,
       "image": "img/takebake/kansas-city-special-4-pack-pizza-deal.jpg",
       "modifiers": [],
-      "shippable": true,
-      "fulfillment": "ship"
+      "shippable": false,
+      "fulfillment": "pickup"
     },
     "tb-quindaro-special-4-pack-pizza-deal": {
       "id": "tb-quindaro-special-4-pack-pizza-deal",
@@ -3628,8 +3652,8 @@
       "price": 59.99,
       "image": "img/takebake/quindaro-special-4-pack-pizza-deal.jpg",
       "modifiers": [],
-      "shippable": true,
-      "fulfillment": "ship"
+      "shippable": false,
+      "fulfillment": "pickup"
     },
     "tb-5-pack-18th-street-special-pizzas-five-loaded-legends": {
       "id": "tb-5-pack-18th-street-special-pizzas-five-loaded-legends",
@@ -3639,8 +3663,8 @@
       "price": 74.99,
       "image": "img/takebake/5-pack-18th-street-special-pizzas-five-loaded-legends.jpg",
       "modifiers": [],
-      "shippable": true,
-      "fulfillment": "ship"
+      "shippable": false,
+      "fulfillment": "pickup"
     },
     "tb-5-pack-beef-pizzas-five-beef-deal": {
       "id": "tb-5-pack-beef-pizzas-five-beef-deal",
@@ -3650,8 +3674,8 @@
       "price": 74.99,
       "image": "img/takebake/5-pack-beef-pizzas-five-beef-deal.jpg",
       "modifiers": [],
-      "shippable": true,
-      "fulfillment": "ship"
+      "shippable": false,
+      "fulfillment": "pickup"
     },
     "tb-5-pack-classic-cheese-pizzas-five-cheese-deal": {
       "id": "tb-5-pack-classic-cheese-pizzas-five-cheese-deal",
@@ -3661,8 +3685,8 @@
       "price": 74.99,
       "image": "img/takebake/5-pack-classic-cheese-pizzas-five-cheese-deal.jpg",
       "modifiers": [],
-      "shippable": true,
-      "fulfillment": "ship"
+      "shippable": false,
+      "fulfillment": "pickup"
     },
     "tb-5-pack-just-meat-pizzas-five-meat-overload": {
       "id": "tb-5-pack-just-meat-pizzas-five-meat-overload",
@@ -3672,8 +3696,8 @@
       "price": 74.99,
       "image": "img/takebake/5-pack-just-meat-pizzas-five-meat-overload.jpg",
       "modifiers": [],
-      "shippable": true,
-      "fulfillment": "ship"
+      "shippable": false,
+      "fulfillment": "pickup"
     },
     "tb-5-pack-pepperoni-pizzas-five-pepperoni-pack": {
       "id": "tb-5-pack-pepperoni-pizzas-five-pepperoni-pack",
@@ -3683,8 +3707,8 @@
       "price": 74.99,
       "image": "img/takebake/5-pack-pepperoni-pizzas-five-pepperoni-pack.jpg",
       "modifiers": [],
-      "shippable": true,
-      "fulfillment": "ship"
+      "shippable": false,
+      "fulfillment": "pickup"
     },
     "tb-5-pack-sausage-delight-pizzas-five-sausage-delight": {
       "id": "tb-5-pack-sausage-delight-pizzas-five-sausage-delight",
@@ -3694,8 +3718,8 @@
       "price": 74.99,
       "image": "img/takebake/5-pack-sausage-delight-pizzas-five-sausage-delight.jpg",
       "modifiers": [],
-      "shippable": true,
-      "fulfillment": "ship"
+      "shippable": false,
+      "fulfillment": "pickup"
     },
     "tb-5-pack-sausage-pizzas-five-sausage-deal": {
       "id": "tb-5-pack-sausage-pizzas-five-sausage-deal",
@@ -3705,8 +3729,8 @@
       "price": 74.99,
       "image": "img/takebake/5-pack-sausage-pizzas-five-sausage-deal.jpg",
       "modifiers": [],
-      "shippable": true,
-      "fulfillment": "ship"
+      "shippable": false,
+      "fulfillment": "pickup"
     },
     "tb-5-pack-veggie-pizzas-five-veggie-fresh-pack": {
       "id": "tb-5-pack-veggie-pizzas-five-veggie-fresh-pack",
@@ -3716,8 +3740,8 @@
       "price": 74.99,
       "image": "img/takebake/5-pack-veggie-pizzas-five-veggie-fresh-pack.jpg",
       "modifiers": [],
-      "shippable": true,
-      "fulfillment": "ship"
+      "shippable": false,
+      "fulfillment": "pickup"
     },
     "tb-chiefs-special-5-pack-pizza-deal": {
       "id": "tb-chiefs-special-5-pack-pizza-deal",
@@ -3727,8 +3751,8 @@
       "price": 74.99,
       "image": "img/takebake/chiefs-special-5-pack-pizza-deal.jpg",
       "modifiers": [],
-      "shippable": true,
-      "fulfillment": "ship"
+      "shippable": false,
+      "fulfillment": "pickup"
     },
     "tb-union-station-special-5-pack-pizza-deal": {
       "id": "tb-union-station-special-5-pack-pizza-deal",
@@ -3738,8 +3762,8 @@
       "price": 74.99,
       "image": "img/takebake/union-station-special-5-pack-pizza-deal.jpg",
       "modifiers": [],
-      "shippable": true,
-      "fulfillment": "ship"
+      "shippable": false,
+      "fulfillment": "pickup"
     },
     "tb-wilsons-ultimate-5-pack-pizza-deal-2x-18th-street-special-1x-veggie-1x-sausage-delight-1x-just-meat-medium-size": {
       "id": "tb-wilsons-ultimate-5-pack-pizza-deal-2x-18th-street-special-1x-veggie-1x-sausage-delight-1x-just-meat-medium-size",
@@ -3749,14 +3773,14 @@
       "price": 74.99,
       "image": "img/takebake/wilsons-ultimate-5-pack-pizza-deal-2x-18th-street-special-1x-veggie-1x-sausage-delight-1x-just-meat-medium-size.jpg",
       "modifiers": [],
-      "shippable": true,
-      "fulfillment": "ship"
+      "shippable": false,
+      "fulfillment": "pickup"
     },
     "tb-build-your-own-pizza-bundle": {
       "id": "tb-build-your-own-pizza-bundle",
       "shopifyHandle": "build-your-own-pizza-bundle",
       "name": "Build Your Own Bundle!",
-      "description": "Build Your Own Bundle! Choose your perfect pizza pack. Use order notes to tell us which pizzas you want. Arrives cold and fresh — bake at home when you're ready.",
+      "description": "Pickup at Quindaro. Build a 3-pack or 5-pack and bake at home. Pick from 18th St Special, Just Meat, Sausage Delight, Veggie, Pepperoni, Cheese, Beef, and Sausage. Write how many of each in the note (example: 2 x 18th St Special, 2 x Cheese, 1 x Sausage).",
       "price": 45.99,
       "image": "img/takebake/build-your-own-pizza-bundle.jpg",
       "modifiers": [
@@ -3777,10 +3801,28 @@
               "price": 29.0
             }
           ]
+        },
+        {
+          "id": "tb-byo-pizzas",
+          "name": "Pizzas you can pick",
+          "type": "multi",
+          "required": false,
+          "min": 0,
+          "max": 0,
+          "options": [
+            { "name": "18th St Special", "price": 0.0 },
+            { "name": "Just Meat", "price": 0.0 },
+            { "name": "Sausage Delight", "price": 0.0 },
+            { "name": "Veggie", "price": 0.0 },
+            { "name": "Pepperoni", "price": 0.0 },
+            { "name": "Cheese", "price": 0.0 },
+            { "name": "Beef", "price": 0.0 },
+            { "name": "Sausage", "price": 0.0 }
+          ]
         }
       ],
-      "shippable": true,
-      "fulfillment": "ship"
+      "shippable": false,
+      "fulfillment": "pickup"
     }
   }
 }

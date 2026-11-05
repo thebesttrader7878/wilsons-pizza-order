@@ -149,6 +149,35 @@
       poster: 'https://cdn.shopify.com/s/files/1/0933/4184/3778/files/poster-7659090442323119373.jpg',
       src: 'https://cdn.shopify.com/videos/c/vp/fac3fc22fa1441549d3ce9df8b8cc002/fac3fc22fa1441549d3ce9df8b8cc002.HD-720p-1.6Mbps-99823113.mp4' }
   ];
+  // Ship pitches are for visitors who are not local pickup customers.
+  // America/Chicago is the Quindaro clock, so that zone stays quiet unless a coarse
+  // lookup places them outside ~50 miles of 1801 Quindaro. A failed lookup stays quiet.
+  const SHIP_URL = 'https://wilsonspizzaandgrill.net';
+  const KC_LAT = 39.1486, KC_LON = -94.6403, KC_MILES = 50;
+  let shipAudience = 'away';
+  try { shipAudience = Intl.DateTimeFormat().resolvedOptions().timeZone === 'America/Chicago' ? 'local' : 'away'; } catch (e) { shipAudience = 'away'; }
+  const showShip = () => shipAudience === 'away';
+  const milesFromQuindaro = (lat, lon) => {
+    const R = 3958.8, rad = Math.PI / 180;
+    const dLat = (lat - KC_LAT) * rad, dLon = (lon - KC_LON) * rad;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(KC_LAT * rad) * Math.cos(lat * rad) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+  };
+  const shipA = (testId, inner, cls) => `<a class="${cls}" href="${SHIP_URL}" target="_blank" rel="noopener" data-testid="${testId}">${inner}</a>`;
+  const shipHero = () => showShip() ? shipA('ship-hero', '<span class="ship-kicker">Free shipping nationwide</span><strong>Ship a pizza</strong><span>Take &amp; bake pies from Quindaro. They arrive cold and fresh. Bake at home when you\'re ready.</span>', 'ship-hero') : '';
+  const shipTake = () => showShip() ? shipA('ship-takebake', '<span class="ship-copy"><span class="ship-kicker">Free shipping nationwide</span><strong>Ship a pizza</strong></span><span class="ship-go">Shop nationwide</span>', 'ship-banner') : '';
+  const shipTop = () => showShip() ? shipA('ship-top', '<b>Ship a pizza</b><span>Free shipping nationwide</span><em>→</em>', 'ship-top') : '';
+  const refineShipAudience = () => {
+    if (shipAudience !== 'local') return;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 2800);
+    fetch('https://ipwho.is/', { signal: ctrl.signal }).then(r => r.json()).then(d => {
+      clearTimeout(timer);
+      const lat = +d.latitude, lon = +d.longitude;
+      if (!d || d.success === false || !Number.isFinite(lat) || !Number.isFinite(lon)) return;
+      if (milesFromQuindaro(lat, lon) > KC_MILES) { shipAudience = 'away'; render(); }
+    }).catch(() => clearTimeout(timer));
+  };
   const socialProof = () => `<section id="social" class="social reveal" data-testid="social-proof" aria-label="Wilson's on TikTok">
       <div class="wrap">
         <div class="social-head">
@@ -179,12 +208,13 @@
   const store = () => { const s = settings(), open = openNow(s);
     const cats = S.menu.categories.filter(c => c.items.some(id => item(id) && !item(id).hidden));
     const q = S.q.toLowerCase(), tel = s.phone.replace(/\D/g, ''), map = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent("Wilson's Pizza & Grill " + s.address);
-    return header() + `<section class="hero"><div class="wrap">${mosaic()}<div class="hcopy">
+    return header() + shipTop() + `<section class="hero"><div class="wrap">${mosaic()}<div class="hcopy">
       <img class="hlogo" src="/img/logo.png" alt="Wilson's Pizza &amp; Grill" data-testid="hero-logo">
       <p class="hname" data-testid="hero-name">Order ahead for pickup</p>
       <div class="chips"><span class="chip ${open && s.acceptOrders ? 'open' : 'closed'}" data-testid="openchip"><i class="dot"></i>${open && s.acceptOrders ? 'Open now · accepting orders' : 'Kitchen closed · still order ahead'}</span><span class="chip">🕙 ${todayHours(s)}</span><span class="chip">📍 Quindaro, KCK</span></div>
       <h1>Order ahead.<br>Pick up hot.<br><em>Made for the creek.</em></h1>
       <p>Carryout from ${esc(s.address.split(',')[0])} — tap to order, we fire it when you pay. Ready in about ${s.pickupMins} min when you pull up.</p>
+      ${shipHero()}
       <div class="ctas"><a class="btn y xl" href="#menu" data-act="tomenu" data-testid="order-pickup">Start carryout order <span class="arrow">→</span></a><a class="btn ghost xl" href="#social" data-act="toscroll" data-testid="see-social">See the hype</a><span class="chip pick">🛍️ Pickup only · ~${s.pickupMins} min</span></div>
       ${ddBtn(s, 'hero')}</div></div></section>
       <section class="proof wrap reveal" data-testid="proof"><div><b>#100</b><span>Best Pizza in America, The Daily Meal</span></div><div><b>4.4★</b><span>on DoorDash from 2,000+ ratings</span></div><div><b>1993</b><span>serving Quindaro since</span></div><div><b>📍</b><span>Right on Quindaro Blvd in KCK</span></div></section>
@@ -196,8 +226,9 @@
         ${q ? '' : catTiles(cats)}
         ${q ? '' : directBox()}
         ${cats.map(c => { const ids = c.items.filter(id => { const it = item(id); return it && !it.hidden && (!q || (it.name + ' ' + it.description).toLowerCase().includes(q)); }); if (!ids.length) return '';
-          const note = c.id === 'take-bake' ? 'Ships nationwide. Pizzas arrive cold and fresh — bake at home when you\'re ready. Pickup kitchen items are in the other menu sections.' : '';
-          return `<section class="sec" id="c-${c.id}"><div class="sech"><h2>${esc(c.name)}</h2>${note ? `<p class="note shipnote">${note}</p>` : ''}</div><div class="grid">${ids.map(id => itemCard(id)).join('')}</div></section>`; }).join('')}
+          const note = c.id === 'take-bake' ? 'Pickup at Quindaro. Take these home and bake them when you\'re ready.' : '';
+          const lead = c.id === 'take-bake' ? shipTake() : '';
+          return `${lead}<section class="sec" id="c-${c.id}"><div class="sech"><h2>${esc(c.name)}</h2>${note ? `<p class="note shipnote">${note}</p>` : ''}</div><div class="grid">${ids.map(id => itemCard(id)).join('')}</div></section>`; }).join('')}
         <section class="visit reveal" id="visit" data-testid="visit"><div><span class="kicker">Come see us</span><h2>Hours & location</h2>
           <p class="addr">${esc(s.address)}</p><div class="vbtns"><a class="btn dark" href="${map}" target="_blank" rel="noopener" data-testid="maplink">📍 Get directions</a><a class="btn ghost" href="tel:${tel}">📞 ${esc(s.phone)}</a></div></div>
           <ul class="hours">${s.hours.map((h, i) => `<li class="${i === kc().day ? 'today' : ''}"><span>${DAYS[i]}</span><b>${h.closed ? 'Closed' : fmtT(h.open) + ' to ' + fmtT(h.close)}</b></li>`).join('')}</ul></section>
@@ -228,7 +259,7 @@
       <div class="bd"><div><h3>${esc(it.name)}</h3><p class="d">${esc(it.description)}</p><b>${fromPrice(it) > it.price ? 'From ' + m(fromPrice(it)) : m(it.price)}</b></div>
       ${(it.modifiers || []).map(g => `<div class="mg"><div class="h"><span>${esc(g.name)}${g.type !== 'single' && g.max ? ` <small class="fine">(${g.min && g.min === g.max ? 'pick ' + g.max : 'up to ' + g.max})</small>` : ''}</span>${g.required ? '<span class="req">Required</span>' : '<span class="opt2">Optional</span>'}</div>
         ${g.options.map((o, oi) => `<label class="opt"><input type="${g.type === 'single' ? 'radio' : 'checkbox'}" name="g_${g.id}" data-g="${g.id}" data-oi="${oi}" ${(M.sel[g.id] || []).includes(oi) ? 'checked' : ''} data-testid="opt-${g.id}-${oi}"><span>${esc(o.name)}</span>${o.price ? (it.price ? '+' : '') + m(o.price) : ''}</label>`).join('')}</div>`).join('')}
-      <label class="f">Special requests<textarea rows="2" data-in="note" placeholder="No onions, extra pickles...">${esc(M.note)}</textarea></label></div>
+      <label class="f">${it.id === 'tb-build-your-own-pizza-bundle' ? 'Which pizzas? Write how many of each' : 'Special requests'}<textarea rows="${it.id === 'tb-build-your-own-pizza-bundle' ? 3 : 2}" data-in="note" placeholder="${it.id === 'tb-build-your-own-pizza-bundle' ? 'Example: 2 x 18th St Special, 2 x Cheese, 1 x Sausage' : 'No onions, extra pickles...'}">${esc(M.note)}</textarea></label></div>
       <div class="sbar"><div class="qty"><button data-act="mq" data-d="-1" aria-label="less">−</button><b data-testid="mqty">${M.qty}</b><button data-act="mq" data-d="1" aria-label="more">+</button></div>
       <button class="btn grow" data-act="add" data-testid="addtocart" ${ok ? '' : 'disabled'}>${ok ? 'Add to order · ' + m(unit * M.qty) : 'Pick the required options'}</button></div></div>`;
     bindSheetSwipe(); initSocialVideos(); };
@@ -384,6 +415,7 @@
     const old = $('#co'), keep = old ? [...old.elements].filter(x => x.name && x.type !== 'radio').map(x => [x.name, x.value]) : null;
     const route = h.split('?')[0], sameRoute = route === lastRoute, y = window.scrollY; lastRoute = route;
     $('#app').innerHTML = html;
+    document.body.classList.toggle('has-ship', !!document.querySelector('.ship-top'));
     reveal(); if (sameRoute) keepY(y);
     mountStripe(); watchMenu(); spyCats(); renderCartDrawer(); initSocialVideos();
     const nf = $('#co'); if (keep && nf) keep.forEach(([k, v]) => { const x = nf.elements[k]; if (x && x.type !== 'radio' && x.tagName !== 'BUTTON') x.value = v; }); };
@@ -503,5 +535,5 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') beat(); else if (navigator.sendBeacon) navigator.sendBeacon('/api/live', new Blob([JSON.stringify({ sid: SID, gone: true })], { type: 'application/json' })); });
   setInterval(beat, 20000); beat();
   window.addEventListener('ctq-cart', beat);
-  Promise.all([fetch('/menu.json').then(r => r.json()), fetch('/api/site').then(r => r.json()).catch(() => null)]).then(([d, c]) => { S.menu = d; if (c) S.cfg = c; render(); });
+  Promise.all([fetch('/menu.json').then(r => r.json()), fetch('/api/site').then(r => r.json()).catch(() => null)]).then(([d, c]) => { S.menu = d; if (c) S.cfg = c; render(); refineShipAudience(); });
 })();
