@@ -149,7 +149,7 @@ app.post('/api/checkout/intent', async (req, res) => {
 
 // Live mode without a publishable key: Stripe-hosted Checkout as a direct charge on the connected account, platform fee via application_fee_amount.
 app.post('/api/checkout/session', async (req, res) => {
-  try { const st = await getStripe(); if (!STRIPE_LIVE || st.status !== 'connected') return res.status(400).json({ ok: false, error: 'Card payments are not set up yet. Choose pay at pickup.' });
+  try { const st = await getStripe(); if (!STRIPE_LIVE || st.status !== 'connected') return res.status(400).json({ ok: false, error: 'Card payments are not set up yet. Please try again later.' });
     const s = await getSettings(); if (!s.acceptOrders) return res.status(409).json({ ok: false, error: 'We are not taking online orders right now.' });
     const items = priceCart(req.body.items, await getEdits()); if (!items.length) return res.status(400).json({ ok: false, error: 'Your cart is empty.' });
     const t = totalsFor(items, s.taxRate, req.body.tip), amount = Math.round(t.total * 100), fee = PLATFORM_FEE_CENTS && PLATFORM_FEE_CENTS < amount ? PLATFORM_FEE_CENTS : 0;
@@ -201,8 +201,8 @@ app.post('/api/orders', async (req, res) => {
     const items = priceCart(b.items, await getEdits()), t = totalsFor(items, s.taxRate, b.tip);
     const st = await getStripe(); const p = b.payment || {};
     let payment;
-    if (p.method === 'store') payment = { method: 'store', label: 'Pay at pickup', id: 'pay_instore_' + now, fee: 0, demo: !STRIPE_LIVE };
-    else if (STRIPE_LIVE && st.status === 'connected') {
+    if (p.method === 'store') return res.status(400).json({ ok: false, error: 'We only take online card payment for carryout orders.' });
+    if (STRIPE_LIVE && st.status === 'connected') {
       let piId = String(p.id || '');
       if (p.session) { const cs = await stripeApi('GET', '/v1/checkout/sessions/' + encodeURIComponent(String(p.session)), null, st.id); if (cs.payment_status !== 'paid') return res.status(402).json({ ok: false, error: 'Payment did not go through.' }); piId = String(cs.payment_intent || ''); }
       if (!/^pi_[A-Za-z0-9]+$/.test(piId)) return res.status(400).json({ ok: false, error: 'Payment missing.' });
