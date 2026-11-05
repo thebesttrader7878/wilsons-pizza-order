@@ -55,11 +55,12 @@
   const soundBar = () => !S.me ? '' : `<div class="sndbar"><button class="chip ${soundOn() ? 'on' : ''}" data-act="sound" data-testid="sound-toggle" aria-pressed="${soundOn()}">${soundOn() ? '🔔 Sound on' : '🔕 Sound off'}</button>${soundOn() && !audioReady() ? '<button class="chip warn" data-act="sound-enable" data-testid="sound-prompt">🔈 Tap to enable sound</button>' : ''}</div>`;
 
   // ---------- login ----------
-  const login = () => `<main class="login"><img src="/img/logo.png" alt="" class="logo"><h1>Owner login</h1><p class="mut">Wilson's Pizza &amp; Grill</p>
-    <form id="loginf" class="card" novalidate><label>Email<input type="email" name="email" autocomplete="username" required value="${esc(S.email || '')}" data-testid="login-email"></label>
-    <label>Password<input type="password" name="password" autocomplete="current-password" required data-testid="login-pass"></label>
+  const login = () => `<main class="login" data-testid="login"><div class="lbg" aria-hidden="true"></div><div class="lwrap"><img src="/img/logo.png" alt="Wilson's Pizza &amp; Grill" class="logo"><p class="eyebrow">Owner dashboard</p><h1>Welcome back</h1><p class="mut">Sign in to see orders as they come in.</p>
+    <form id="loginf" class="lcard" novalidate><label>Email<input type="email" name="email" autocomplete="username" inputmode="email" autocapitalize="off" spellcheck="false" required placeholder="you@example.com" value="${esc(S.email || '')}" data-testid="login-email"></label>
+    <label>Password<span class="pwbox"><input type="password" name="password" autocomplete="current-password" required placeholder="Your password" data-testid="login-pass"><button type="button" class="pweye" data-act="pwshow" aria-label="Show password" data-testid="login-show">Show</button></span></label>
     <label class="tog keep"><input type="checkbox" name="keep" ${LS.get('ctq_keep', true) ? 'checked' : ''} data-testid="login-keep"> Keep me signed in for 30 days</label>
-    <p class="err" data-testid="login-err" ${S.err ? '' : 'hidden'}>${esc(S.err)}</p><button class="btn" data-testid="login-btn">Log in</button></form>
+    <p class="err" role="alert" data-testid="login-err" ${S.err ? '' : 'hidden'}>${esc(S.err)}</p><button class="btn lbtn" data-testid="login-btn">Sign in</button></form>
+    <p class="fine lfoot">🔒 Secure owner area</p></div>
     <p class="fine">Customers can’t see this page. <a href="/">Back to the store</a></p></main>`;
 
   // ---------- orders ----------
@@ -160,7 +161,7 @@
 
   // ---------- shell ----------
   const render = () => { const app = $('#app');
-    if (!S.me) { app.innerHTML = login(); document.title = 'Owner login'; return; }
+    if (!S.me) { app.innerHTML = login(); document.title = 'Owner login'; syncPing(); return; }
     const o = S.open && S.orders.find(x => x.id === S.open), y = window.scrollY;
     const body = { orders, live: liveTab, analytics, reports, menu: menuTab, settings }[S.tab]();
     const nNew = S.orders.filter(x => x.status === 'new').length;
@@ -169,11 +170,11 @@
       <main class="main" data-testid="tab-${S.tab}">${S.tab === 'orders' || S.tab === 'live' ? soundBar() : ''}${body}</main>
       <nav class="tabs" data-testid="tabbar">${TABS.map(([k, l, i]) => `<button class="${S.tab === k ? 'on' : ''}" data-act="tab" data-v="${k}" data-testid="tab-btn-${k}"><span>${i}</span>${l}${k === 'orders' && nNew ? `<em class="badge" data-testid="badge">${nNew}</em>` : ''}</button>`).join('')}</nav>
       ${o ? `<div class="scrim" data-act="close"></div>${detail(o)}` : ''}`;
-    if (!o) window.scrollTo(0, y); };
+    if (!o) window.scrollTo(0, y); syncPing(); };
 
   const loadOrders = async quiet => { try { const r = await api('/api/admin/orders'); const ids = new Set(S.orders.map(o => o.id));
       const fresh = r.orders.filter(o => o.status === 'new' && !ids.has(o.id));
-      const sig = JSON.stringify(r.orders), changed = sig !== S.sig; S.sig = sig; S.orders = r.orders;
+      const sig = JSON.stringify(r.orders), changed = sig !== S.sig; S.sig = sig; S.orders = r.orders; syncPing();
       if (quiet && !changed) return;
       if (S.seen && fresh.length) { chime(); toast(fresh.length === 1 ? `New order #${fresh[0].id} from ${fresh[0].customer.name}` : `${fresh.length} new orders`); }
       S.seen = true; if (!quiet || !document.activeElement || !document.activeElement.matches('input,textarea,select')) render(); } catch (e) {} };
@@ -184,6 +185,14 @@
     if (S.tab === 'menu') { if (!S.menu) S.menu = await (await fetch('/menu.json')).json(); const r = await api('/api/admin/settings'); S.edits = r.menuEdits; }
     if (S.tab === 'settings') { const [r, st] = await Promise.all([api('/api/admin/settings'), api('/api/admin/stripe')]); S.settings = r.settings; S.webhook = r.webhook; S.lastAlert = r.lastAlert; S.stripe = st; }
     render(); } catch (e) { if (S.me) toast(e.message); } };
+  // Re-ping every 60s while any order is still 'new' (not accepted). Stops when none remain.
+  let ping = null; const PING_MS = window.__PING_MS || 60000;
+  const syncPing = () => { const n = S.me ? S.orders.filter(o => o.status === 'new').length : 0;
+    document.body.classList.toggle('urgent', n > 0);
+    if (n && !ping) ping = setInterval(() => { const k = S.orders.filter(o => o.status === 'new').length; if (!S.me || !k) { clearInterval(ping); ping = null; document.body.classList.remove('urgent'); return; }
+      window.__repings = (window.__repings || 0) + 1; chime(); toast(k === 1 ? '⏰ 1 order still waiting to be accepted' : `⏰ ${k} orders still waiting to be accepted`);
+      try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) {} }, PING_MS);
+    else if (!n && ping) { clearInterval(ping); ping = null; } };
   let poll = null, lpoll = null;
   const start = async () => { render(); await loadOrders(); loadTab(); clearInterval(poll); poll = setInterval(() => { if (S.me) loadOrders(true); }, 5000); clearInterval(lpoll); lpoll = setInterval(async () => { if (S.me && S.tab === 'live' && !document.hidden) { try { S.live = await api('/api/admin/live'); if (S.tab === 'live') render(); } catch (e) {} } }, 10000); };
 
@@ -193,6 +202,7 @@
   const act = async (a, el) => { try {
     if (a === 'tab') { S.tab = el.dataset.v; S.open = null; history.replaceState(null, '', '#' + S.tab); window.scrollTo(0, 0); render(); loadTab(); }
     else if (a === 'sound') { LS.set('ctq_sound2', !soundOn()); if (soundOn()) { unlock(); kaching(); } render(); }
+    else if (a === 'pwshow') { const pw = $('[data-testid=login-pass]'); const sh = pw.type === 'password'; pw.type = sh ? 'text' : 'password'; el.textContent = sh ? 'Hide' : 'Show'; el.setAttribute('aria-label', sh ? 'Hide password' : 'Show password'); }
     else if (a === 'sound-enable') { unlock(); kaching(); render(); }
     else if (a === 'filter') { S.filter = el.dataset.v; render(); }
     else if (a === 'open') { S.open = el.dataset.id; S.sheet = null; render(); }
