@@ -79,6 +79,48 @@
   // Real DoorDash rating snippets seen on her store page (Oct 2026). No invented reviews.
   const DDR = { '18th-street-special-regular-crust': '96% (31)', 'just-meat-stuffed-crust': '100% (18)', 'triple-cheeseburger': '82% (28)', 'chicken-wings': '84% (32)' };
   const HERO = ['18th-street-special-regular-crust', 'just-meat-stuffed-crust', 'chicken-wings', 'double-cheeseburger', 'garlic-cheesesticks', 'beef-calzone', 'bad-azz-fish-sandwich'];
+  // Real TikTok clips from wilsonspizzaandgrill.net (Shopify CDN mp4s + posters). No AI fakes.
+  const SOCIAL_VIDEOS = [
+    { id: '7631636734610050335', label: 'Packed in KC', caption: 'How we ship cold & fresh',
+      poster: 'https://cdn.shopify.com/s/files/1/0933/4184/3778/files/poster-7631636734610050335.jpg',
+      src: 'https://cdn.shopify.com/videos/c/vp/885a22fa69a949088036e4f08cc63a6d/885a22fa69a949088036e4f08cc63a6d.HD-720p-1.6Mbps-99823109.mp4' },
+    { id: '7618239108057517342', label: 'Bake it your way', caption: 'How to cook your pizza',
+      poster: 'https://cdn.shopify.com/s/files/1/0933/4184/3778/files/poster-7618239108057517342.jpg',
+      src: 'https://cdn.shopify.com/videos/c/vp/690689f1e02d4b5b9e000ac5d3738315/690689f1e02d4b5b9e000ac5d3738315.HD-720p-1.6Mbps-99823108.mp4' },
+    { id: '7650847976817986829', label: 'Real reviews', caption: 'What customers are saying',
+      poster: 'https://cdn.shopify.com/s/files/1/0933/4184/3778/files/poster-7650847976817986829.jpg',
+      src: 'https://cdn.shopify.com/videos/c/vp/b132b2131b21425190980a1c6198c6e3/b132b2131b21425190980a1c6198c6e3.HD-720p-1.6Mbps-99823112.mp4' },
+    { id: '7650241686890745119', label: 'TikTok love', caption: '@wilsonpizza',
+      poster: 'https://cdn.shopify.com/s/files/1/0933/4184/3778/files/poster-7650241686890745119.jpg',
+      src: 'https://cdn.shopify.com/videos/c/vp/a8890d858264405ea986da0d7f3e932f/a8890d858264405ea986da0d7f3e932f.HD-720p-1.6Mbps-99823111.mp4' },
+    { id: '7613440318712663327', label: 'In the kitchen', caption: 'Quindaro since 1993',
+      poster: 'https://cdn.shopify.com/s/files/1/0933/4184/3778/files/poster-7613440318712663327.jpg',
+      src: 'https://cdn.shopify.com/videos/c/vp/1383628e65944531aa659043e7580fbc/1383628e65944531aa659043e7580fbc.HD-720p-1.6Mbps-99823107.mp4' },
+    { id: '7659090442323119373', label: 'Fan favorite', caption: 'See why they re-order',
+      poster: 'https://cdn.shopify.com/s/files/1/0933/4184/3778/files/poster-7659090442323119373.jpg',
+      src: 'https://cdn.shopify.com/videos/c/vp/fac3fc22fa1441549d3ce9df8b8cc002/fac3fc22fa1441549d3ce9df8b8cc002.HD-720p-1.6Mbps-99823113.mp4' }
+  ];
+  const socialProof = () => `<section id="social" class="social reveal" data-testid="social-proof" aria-label="Wilson's on TikTok">
+      <div class="wrap">
+        <div class="social-head">
+          <div>
+            <span class="kicker">Straight from Quindaro</span>
+            <h2>See why the creek keeps coming back</h2>
+            <p class="social-sub">Real clips from <a href="https://www.tiktok.com/@wilsonpizza" target="_blank" rel="noopener">@wilsonpizza</a> — same ones on wilsonspizzaandgrill.net. Mute autoplay, tap for sound on TikTok.</p>
+          </div>
+          <a class="btn y social-cta" href="#menu" data-act="tomenu" data-testid="social-order">Order ahead for pickup <span class="arrow">→</span></a>
+        </div>
+        <div class="social-row" role="list">
+          ${SOCIAL_VIDEOS.map(v => `<article class="sv" role="listitem">
+            <div class="sv-frame">
+              <video class="sv-el" muted loop playsinline preload="none" poster="${esc(v.poster)}" data-src="${esc(v.src)}" aria-label="${esc(v.caption)}"></video>
+              <a class="sv-tik" href="https://www.tiktok.com/@wilsonpizza/video/${v.id}" target="_blank" rel="noopener" aria-label="Watch ${esc(v.label)} on TikTok">Watch on TikTok</a>
+            </div>
+            <div class="sv-cap"><b>${esc(v.label)}</b><span>${esc(v.caption)}</span></div>
+          </article>`).join('')}
+        </div>
+      </div>
+    </section>`;
   const mosaic = () => { const its = HERO.map(item).filter(x => x && x.image && !x.hidden);
     return `<div class="mosaic" data-testid="hero-photos">${its.map((it, i) => `<button class="tile t${i}" data-act="open" data-id="${it.id}" style="background-image:url('/${it.image}')" aria-label="${esc(it.name)}"><span>${esc(it.name) + ' · ' + m(it.price)}</span></button>`).join('')}</div>`; };
   const ddBtn = (s, where) => `<a class="btn dd" href="${esc(s.doordashUrl)}" target="_blank" rel="noopener" data-testid="dd-${where}">🚗 Want delivery? Order on DoorDash</a>`;
@@ -92,11 +134,12 @@
       <img class="hlogo" src="/img/logo.png" alt="Wilson's Pizza &amp; Grill" data-testid="hero-logo">
       <p class="hname" data-testid="hero-name">Order ahead for pickup</p>
       <div class="chips"><span class="chip ${open && s.acceptOrders ? 'open' : 'closed'}" data-testid="openchip"><i class="dot"></i>${open && s.acceptOrders ? 'Open now · accepting orders' : 'Kitchen closed · still order ahead'}</span><span class="chip">🕙 ${todayHours(s)}</span><span class="chip">📍 Quindaro, KCK</span></div>
-      <h1>Order online.<br>Pick up hot.<br><em>Skip the wait.</em></h1>
-      <p>Place your carryout order now at ${esc(s.address.split(',')[0])}. We start it when you order — ready in about ${s.pickupMins} min when you pull up.</p>
-      <div class="ctas"><a class="btn y xl" href="#menu" data-act="tomenu" data-testid="order-pickup">Start carryout order <span class="arrow">→</span></a><span class="chip pick">🛍️ Pickup only · ~${s.pickupMins} min</span></div>
+      <h1>Order ahead.<br>Pick up hot.<br><em>Made for the creek.</em></h1>
+      <p>Carryout from ${esc(s.address.split(',')[0])} — tap to order, we fire it when you pay. Ready in about ${s.pickupMins} min when you pull up.</p>
+      <div class="ctas"><a class="btn y xl" href="#menu" data-act="tomenu" data-testid="order-pickup">Start carryout order <span class="arrow">→</span></a><a class="btn ghost xl" href="#social" data-act="toscroll" data-testid="see-social">See the hype</a><span class="chip pick">🛍️ Pickup only · ~${s.pickupMins} min</span></div>
       ${ddBtn(s, 'hero')}</div></div></section>
       <section class="proof wrap reveal" data-testid="proof"><div><b>#100</b><span>Best Pizza in America, The Daily Meal</span></div><div><b>4.4★</b><span>on DoorDash from 2,000+ ratings</span></div><div><b>1993</b><span>serving Quindaro since</span></div><div><b>📍</b><span>Right on Quindaro Blvd in KCK</span></div></section>
+      ${socialProof()}
       <nav class="catnav" id="menu"><div class="wrap">${cats.map(c => `<a href="#c-${c.id}" data-act="cat" data-c="${c.id}">${esc(c.name)}</a>`).join('')}</div><i class="catfade" aria-hidden="true"></i></nav>
       <div class="searchbar"><div class="wrap"><div class="search"><input type="text" placeholder="Search pizza, wings, burgers..." value="${esc(S.q)}" data-in="q" data-testid="search" aria-label="Search the menu"></div></div></div>
       <div class="wrap layout"><main>
@@ -293,7 +336,7 @@
     const route = h.split('?')[0], sameRoute = route === lastRoute, y = window.scrollY; lastRoute = route;
     $('#app').innerHTML = html;
     reveal(); if (sameRoute) keepY(y);
-    mountStripe(); watchMenu(); spyCats(); renderCartDrawer();
+    mountStripe(); watchMenu(); spyCats(); renderCartDrawer(); initSocialVideos();
     const nf = $('#co'); if (keep && nf) keep.forEach(([k, v]) => { const x = nf.elements[k]; if (x && x.type !== 'radio' && x.tagName !== 'BUTTON') x.value = v; }); };
   window.addEventListener('hashchange', () => { if (!/^#c-|^#menu/.test(location.hash)) { const was = lastRoute; render(); if (lastRoute !== was) keepY(0); } });
 
@@ -307,6 +350,8 @@
     else if (a === 'closecart') { if (el.tagName === 'A' && el.getAttribute('href') === '#/checkout') { closeCart(); return; } e.preventDefault(); closeCart(); }
     else if (a === 'inc' || a === 'dec' || a === 'rm') { const l = S.cart[+el.dataset.i]; if (a === 'inc') l.qty++; else if (a === 'dec') l.qty--; if (a === 'rm' || l.qty < 1) S.cart.splice(+el.dataset.i, 1); saveCart(); render(); }
     else if (a === 'tip') { S.tip = +el.dataset.v; render(); }
+    else if (a === 'tomenu') { /* hash handles scroll */ }
+    else if (a === 'toscroll') { e.preventDefault(); const t = document.querySelector(el.getAttribute('href') || '#social'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
     else if (a === 'cat') { document.querySelectorAll('.catnav a').forEach(x => x.classList.toggle('on', x === el)); setTimeout(() => { const wrap = document.querySelector('.catnav .wrap'); if (!wrap) return; const left = el.offsetLeft - (wrap.clientWidth - el.clientWidth) / 2; wrap.scrollTo({ left: Math.max(0, left), behavior: 'smooth' }); }, 0); }
   });
   document.addEventListener('change', e => { const el = e.target;
@@ -321,6 +366,27 @@
   document.addEventListener('keydown', e => { if (e.key !== 'Escape') return; if (M) closeModal(); else if (cartOpen) closeCart(); });
 
   window.CTQ = { totals, lineUnit, openNow };
+
+  let socialObs = null;
+  const initSocialVideos = () => {
+    const vids = document.querySelectorAll('video.sv-el[data-src]');
+    if (!vids.length) return;
+    if (socialObs) { socialObs.disconnect(); socialObs = null; }
+    const load = v => { if (!v.src) { v.src = v.dataset.src; v.load(); } };
+    if (!('IntersectionObserver' in window)) {
+      vids.forEach(v => { load(v); v.play().catch(() => {}); });
+      return;
+    }
+    socialObs = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        const v = e.target;
+        if (e.isIntersecting) { load(v); const p = v.play(); if (p) p.catch(() => {}); }
+        else if (!v.paused) v.pause();
+      });
+    }, { rootMargin: '180px 0px', threshold: 0.2 });
+    vids.forEach(v => socialObs.observe(v));
+  };
+
   let menuObs = null;
   const watchMenu = () => { const el = $('#menu'); if (!el || sent.menuview) return; if (!('IntersectionObserver' in window)) return; if (menuObs) menuObs.disconnect();
     menuObs = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) { track('menuview', true); menuObs.disconnect(); } }); menuObs.observe(el); };
