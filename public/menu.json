@@ -19,27 +19,6 @@
   ],
   "categories": [
     {
-      "id": "dinners",
-      "name": "Dinners",
-      "items": [
-        "2-meats-2-sides"
-      ]
-    },
-    {
-      "id": "pizza",
-      "name": "Pizza",
-      "items": [
-        "ex-large-3-topping-pizza-16",
-        "extra-large-16-inch-1-topping-pizza",
-        "giant-slice-pizza",
-        "personal-pan-pizza-3-toppings",
-        "ground-beef-pizza-fries",
-        "pepperoni-pizza-fries",
-        "trio-deal-one-toppers",
-        "sausage-pizza-fries"
-      ]
-    },
-    {
       "id": "gourmet-pizza",
       "name": "Gourmet Pizza",
       "items": [
@@ -60,6 +39,27 @@
         "18th-street-special-stuffed-crust",
         "just-meat-regular-crust",
         "veggie-pizza-stuffed-crust"
+      ]
+    },
+    {
+      "id": "dinners",
+      "name": "Dinners",
+      "items": [
+        "2-meats-2-sides"
+      ]
+    },
+    {
+      "id": "pizza",
+      "name": "Pizza",
+      "items": [
+        "ex-large-3-topping-pizza-16",
+        "extra-large-16-inch-1-topping-pizza",
+        "giant-slice-pizza",
+        "personal-pan-pizza-3-toppings",
+        "ground-beef-pizza-fries",
+        "pepperoni-pizza-fries",
+        "trio-deal-one-toppers",
+        "sausage-pizza-fries"
       ]
     },
     {
@@ -1192,7 +1192,7 @@
       "name": "Pepperoni Delight Stuffed Crust",
       "description": "Pepperoni, green peppers, onions & black olives.",
       "price": 26.99,
-      "image": "",
+      "image": "img/pepperoni-delight-stuffed-crust.jpg",
       "modifiers": [
         {
           "id": "g5544475",
@@ -3638,7 +3638,7 @@
       "shopifyHandle": "kansas-city-special-4-pack-pizza-deal",
       "name": "Kansas City Special - 4 Pack Pizza Deal",
       "description": "The Kansas City Special bundle includes 2x Wilson's 18th Street Special Take & Bake pizzas and 2x Wilson's Just Meat Take & Bake pizzas — a loaded lineup perfect for feeding a crowd.",
-      "price": 129.99,
+      "price": 59.99,
       "image": "img/takebake/kansas-city-special-4-pack-pizza-deal.jpg",
       "modifiers": [],
       "shippable": false,
@@ -3649,7 +3649,7 @@
       "shopifyHandle": "quindaro-special-4-pack-pizza-deal",
       "name": "Quindaro Special - 4 Pack Pizza Deal",
       "description": "A 4-pizza take & bake bundle featuring: 1 × 18th Street Special, 1 × Just Meat, 1 × Sausage Delight, and 1 × Pepperoni.",
-      "price": 129.99,
+      "price": 59.99,
       "image": "img/takebake/quindaro-special-4-pack-pizza-deal.jpg",
       "modifiers": [],
       "shippable": false,

@@ -55,7 +55,52 @@
   const PAL = [['#CF0F00', '#6e0800'], ['#1a1a1a', '#3a0600'], ['#2a0500', '#CF0F00'], ['#141414', '#4a3a10']];
   const fallback = (it, big) => { const h = [...it.id].reduce((a, c) => a + c.charCodeAt(0), 0) % PAL.length, [a, b] = PAL[h];
     return `<div class="fb ${big ? 'big' : ''}" style="--a:${a};--b:${b}"><span class="swirl">🍕</span><span class="fbn">${esc(it.name)}</span><span class="fbt">Wilson's</span></div>`; };
-  const photo = (it, cls = 'ph') => it.image ? `<div class="${cls}" style="background-image:url('/${it.image}')"></div>` : `<div class="${cls} nophoto">${fallback(it)}</div>`;
+  // Clips in public/social/products. Gourmet pizza + Take & Bake only, and only on a name match.
+  // User clips replace the old TikTok files for Double Decker, stuffed pepperoni, and sausage.
+  // Cards use the catalog still. Unmatched items stay on that still, with no clip.
+  const PRODUCT_VIDEOS = {
+    'double-decker': { file: 'double-decker' },
+    'just-meat': { id: '7701847875797470477', file: 'just-meat' },
+    '18th': { id: '7701731294371237150', file: '18th' },
+    'pepperoni-stuffed': { file: 'pepperoni-stuffed' },
+    pepperoni: { id: '7702061460901334285', file: 'pepperoni' },
+    veggie: { id: '7374935443499994410', file: 'veggie' },
+    beef: { id: '7671819274570304781', file: 'beef' },
+    sausage: { file: 'sausage' },
+    cheese: { id: '7691076922482199821', file: 'cheese' }
+  };
+  // First match wins. Stuffed pepperoni is not the plain pepperoni clip. Cheese never hits burgers or sticks.
+  const VIDEO_RULES = [
+    ['double-decker', n => n.includes('double decker')],
+    ['just-meat', n => n.includes('just meat')],
+    ['18th', n => n.includes('18th street') || n.includes('18th st')],
+    ['pepperoni-stuffed', n => n.includes('pepperoni') && n.includes('stuffed')],
+    ['pepperoni', n => n.includes('pepperoni')],
+    ['veggie', n => n.includes('veggie')],
+    ['beef', n => n.includes('beef') && !n.includes('burger')],
+    ['sausage', n => n.includes('sausage')],
+    ['cheese', n => !n.includes('cheeseburger') && !n.includes('cheesestick') && (n.includes('cheese pizza') || (n.includes('take') && n.includes('bake') && n.includes('cheese')))]
+  ];
+  const itemCategory = id => { const cats = (S.menu && S.menu.categories) || []; const c = cats.find(x => (x.items || []).includes(id)); return c ? c.id : ''; };
+  const productVideo = it => {
+    if (!it || !it.id) return null;
+    const cat = itemCategory(it.id);
+    if (cat !== 'gourmet-pizza' && cat !== 'take-bake') return null;
+    const n = String(it.name || '').toLowerCase().replace(/\u2019/g, "'");
+    const hit = VIDEO_RULES.find(([, test]) => test(n));
+    return hit ? PRODUCT_VIDEOS[hit[0]] : null;
+  };
+  const photo = (it, cls = 'ph', big = false) => {
+    // Cards use the catalog still only, never a clip poster. The 9:16 clip plays in the opened sheet.
+    const vid = big ? productVideo(it) : null;
+    const still = it.image ? '/' + it.image : '';
+    const poster = still || (vid ? '/social/products/' + vid.file + '.jpg' : '');
+    const shown = big ? poster : still;
+    const bg = shown ? ` style="background-image:url('${shown}')"` : '';
+    const tik = vid && vid.id ? ` data-tiktok="${vid.id}"` : '';
+    if (vid) return `<div class="${cls} hasvid"${bg} data-video="${vid.file}"><video class="ph-vid" muted loop playsinline preload="none" poster="${esc(poster)}" data-src="/social/products/${vid.file}.mp4"${tik} aria-hidden="true"></video></div>`;
+    return still ? `<div class="${cls}"${bg}></div>` : `<div class="${cls} nophoto">${fallback(it, big)}</div>`;
+  };
 
   const hasRequired = it => (it.modifiers || []).some(g => g.required);
   const itemCard = (id, popular) => { const it = item(id); if (!it || it.hidden) return ''; const so = it.soldOut;
@@ -78,12 +123,16 @@
 
   // Real DoorDash rating snippets seen on her store page (Oct 2026). No invented reviews.
   const DDR = { '18th-street-special-regular-crust': '96% (31)', 'just-meat-stuffed-crust': '100% (18)', 'triple-cheeseburger': '82% (28)', 'chicken-wings': '84% (32)' };
-  const HERO = ['18th-street-special-regular-crust', 'just-meat-stuffed-crust', 'chicken-wings', 'double-cheeseburger', 'garlic-cheesesticks', 'beef-calzone', 'bad-azz-fish-sandwich'];
+  const HERO = [
+    { id: '18th-street-special-regular-crust', image: 'img/hero-18th-street.jpg' },
+    { id: 'just-meat-stuffed-crust', image: 'img/hero-just-meat.jpg' },
+    { id: 'pepperoni-delight-stuffed-crust', image: 'img/hero-pepperoni-stuffed.jpg' }
+  ];
   // Real TikTok clips from wilsonspizzaandgrill.net (Shopify CDN mp4s + posters). No AI fakes.
   const SOCIAL_VIDEOS = [
     { id: '7699089798325128462', label: 'Double Decker', caption: 'One pie. Pure Wilson\'s.',
-      poster: '/social/double-decker.jpg',
-      src: '/social/double-decker.mp4' },
+      poster: '/social/products/double-decker.jpg',
+      src: '/social/products/double-decker.mp4' },
     { id: '7618239108057517342', label: 'Bake it your way', caption: 'How to cook your pizza',
       poster: 'https://cdn.shopify.com/s/files/1/0933/4184/3778/files/poster-7618239108057517342.jpg',
       src: 'https://cdn.shopify.com/videos/c/vp/690689f1e02d4b5b9e000ac5d3738315/690689f1e02d4b5b9e000ac5d3738315.HD-720p-1.6Mbps-99823108.mp4' },
@@ -100,12 +149,6 @@
       poster: 'https://cdn.shopify.com/s/files/1/0933/4184/3778/files/poster-7659090442323119373.jpg',
       src: 'https://cdn.shopify.com/videos/c/vp/fac3fc22fa1441549d3ce9df8b8cc002/fac3fc22fa1441549d3ce9df8b8cc002.HD-720p-1.6Mbps-99823113.mp4' }
   ];
-  // Item-sheet clips, keyed by menu name. Cards keep the still in item.image.
-  const PRODUCT_VIDEOS = {
-    'Double Decker': '/social/products/double-decker.mp4'
-  };
-  const productVideo = it => (it && PRODUCT_VIDEOS[it.name]) || '';
-  const reduceMotion = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   // Ship pitches are for visitors who are not local pickup customers.
   // America/Chicago is the Quindaro clock, so that zone stays quiet unless a coarse
   // lookup places them outside ~50 miles of 1801 Quindaro. A failed lookup stays quiet.
@@ -156,8 +199,8 @@
         </div>
       </div>
     </section>`;
-  const mosaic = () => { const its = HERO.map(item).filter(x => x && x.image && !x.hidden);
-    return `<div class="mosaic" data-testid="hero-photos">${its.map((it, i) => `<button class="tile t${i}" data-act="open" data-id="${it.id}" style="background-image:url('/${it.image}')" aria-label="${esc(it.name)}"><span>${esc(it.name) + ' · ' + m(it.price)}</span></button>`).join('')}</div>`; };
+  const mosaic = () => { const its = HERO.map(h => { const it = item(h.id); return it && !it.hidden ? Object.assign({}, it, { image: h.image }) : null; }).filter(Boolean);
+    return `<div class="mosaic hero3" data-testid="hero-photos">${its.map((it, i) => `<button class="tile t${i}" data-act="open" data-id="${it.id}" style="background-image:url('/${it.image}')" aria-label="${esc(it.name)}"><span>${esc(it.name) + ' · ' + m(it.price)}</span></button>`).join('')}</div>`; };
   const ddBtn = (s, where) => `<a class="btn dd" href="${esc(s.doordashUrl)}" target="_blank" rel="noopener" data-testid="dd-${where}">🚗 Want delivery? Order on DoorDash</a>`;
   const CATICON = { beverages: '🥤', deserts: '🍰', fish: '🐟', 'combo-deals': '⭐', tshirts: '🧢', chicken: '🍗', 'take-bake': '📦' };
   const catTiles = cats => `<section class="cats reveal" data-testid="cattiles"><div class="sech"><span class="kicker">Browse</span><h2>What are you craving?</h2></div><div class="ctiles">${cats.map(c => { const ph = c.items.map(item).find(x => x && x.image && !x.hidden);
@@ -209,25 +252,17 @@
     renderModal(); };
   const modalValid = it => (it.modifiers || []).every(g => !g.required || (M.sel[g.id] || []).length >= Math.max(1, g.min || 0));
   const fromPrice = it => it.price + (it.modifiers || []).filter(x => x.required && x.type === 'single' && x.options.length).reduce((s, x) => s + Math.min(...x.options.map(o => +o.price || 0)), 0);
-  const sheetMedia = it => {
-    const vid = productVideo(it);
-    if (vid && !reduceMotion()) {
-      const poster = vid.replace(/\.mp4(\?.*)?$/, '.jpg');
-      return `<div class="img has-vid"><video class="sheet-vid" muted loop playsinline autoplay preload="metadata" poster="${esc(poster)}" src="${esc(vid)}" aria-label="${esc(it.name)}"></video><button class="x" data-act="close" aria-label="Close">×</button></div>`;
-    }
-    return `<div class="img">${it.image ? `<div class="ph" style="background-image:url('/${it.image}')"></div>` : fallback(it, true)}<button class="x" data-act="close" aria-label="Close">×</button></div>`;
-  };
   const renderModal = () => { const it = item(M.id), unit = lineUnit(it, M.sel), ok = modalValid(it);
     modalY = window.scrollY; $('#modal').hidden = false; document.body.style.overflow = 'hidden';
     $('#modal').innerHTML = `<div class="sheet" role="dialog" aria-label="${esc(it.name)}" data-testid="itemmodal">
-      <div class="grab"></div>${sheetMedia(it)}
+      <div class="grab"></div><div class="img">${photo(it, 'ph', true)}<button class="x" data-act="close" aria-label="Close">×</button></div>
       <div class="bd"><div><h3>${esc(it.name)}</h3><p class="d">${esc(it.description)}</p><b>${fromPrice(it) > it.price ? 'From ' + m(fromPrice(it)) : m(it.price)}</b></div>
       ${(it.modifiers || []).map(g => `<div class="mg"><div class="h"><span>${esc(g.name)}${g.type !== 'single' && g.max ? ` <small class="fine">(${g.min && g.min === g.max ? 'pick ' + g.max : 'up to ' + g.max})</small>` : ''}</span>${g.required ? '<span class="req">Required</span>' : '<span class="opt2">Optional</span>'}</div>
         ${g.options.map((o, oi) => `<label class="opt"><input type="${g.type === 'single' ? 'radio' : 'checkbox'}" name="g_${g.id}" data-g="${g.id}" data-oi="${oi}" ${(M.sel[g.id] || []).includes(oi) ? 'checked' : ''} data-testid="opt-${g.id}-${oi}"><span>${esc(o.name)}</span>${o.price ? (it.price ? '+' : '') + m(o.price) : ''}</label>`).join('')}</div>`).join('')}
       <label class="f">${it.id === 'tb-build-your-own-pizza-bundle' ? 'Which pizzas? Write how many of each' : 'Special requests'}<textarea rows="${it.id === 'tb-build-your-own-pizza-bundle' ? 3 : 2}" data-in="note" placeholder="${it.id === 'tb-build-your-own-pizza-bundle' ? 'Example: 2 x 18th St Special, 2 x Cheese, 1 x Sausage' : 'No onions, extra pickles...'}">${esc(M.note)}</textarea></label></div>
       <div class="sbar"><div class="qty"><button data-act="mq" data-d="-1" aria-label="less">−</button><b data-testid="mqty">${M.qty}</b><button data-act="mq" data-d="1" aria-label="more">+</button></div>
       <button class="btn grow" data-act="add" data-testid="addtocart" ${ok ? '' : 'disabled'}>${ok ? 'Add to order · ' + m(unit * M.qty) : 'Pick the required options'}</button></div></div>`;
-    bindSheetSwipe(); };
+    bindSheetSwipe(); initSocialVideos(); };
   let modalY = 0;
   const bindSheetSwipe = () => {
     const sheet = document.querySelector('#modal .sheet'); if (!sheet) return;
@@ -415,7 +450,7 @@
 
   let socialObs = null;
   const initSocialVideos = () => {
-    const vids = document.querySelectorAll('video.sv-el[data-src]');
+    const vids = document.querySelectorAll('video.sv-el[data-src], video.ph-vid[data-src]');
     if (!vids.length) return;
     if (socialObs) { socialObs.disconnect(); socialObs = null; }
     const load = v => { if (!v.src) { v.src = v.dataset.src; v.load(); } };

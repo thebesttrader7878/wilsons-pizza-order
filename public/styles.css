@@ -374,6 +374,13 @@ body.drawer-open{overflow:hidden}
   .sv-el{display:none}
   .sv-frame{background-size:cover;background-position:center}
 }
+/* Per-product TikTok in the item sheet only. Menu cards stay on the still photo, which also sits under the clip as the poster. */
+.ph.hasvid{position:relative;overflow:hidden;background-position:center;background-size:cover}
+.ph-vid{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;background:#1a1a1a}
+.sheet .img .ph.hasvid{height:100%}
+@media(prefers-reduced-motion:reduce){
+  .ph-vid{display:none}
+}
 
 /* ===== Hero mosaic: mobile no-cutoff (Safari) ===== */
 /* Negative margin + hero overflow:hidden was clipping pizza tiles on iPhone. */
@@ -464,6 +471,15 @@ body.drawer-open{overflow:hidden}
   }
   .hero .hcopy{min-width:0}
   .hero h1{overflow-wrap:anywhere}
+
+  /* Item-sheet TikToks are 9:16. Show the whole frame; black bars are fine. Menu-card stills stay square. */
+  .sheet .img:has(.ph.hasvid){height:auto;background:#000}
+  .sheet .img .ph.hasvid{
+    width:100%;height:auto;aspect-ratio:9/16;
+    background-color:#000;background-size:contain;background-repeat:no-repeat;background-position:center;
+  }
+  .sheet .img:has(.ph.hasvid) .x{z-index:4}
+  .sheet .img .ph.hasvid .ph-vid{object-fit:contain;background:#000}
 }
 
 /* Ship-a-pizza pitches: non-local visitors only. Gold so they cannot be missed on the black page. */
@@ -489,11 +505,6 @@ body.drawer-open{overflow:hidden}
   .ship-top b{font-size:22px}
 }
 
-/* Item sheet: still on the card, clip only inside the sheet. */
-.sheet .img.has-vid{height:min(58vh,520px);background:#000}
-.sheet .sheet-vid{width:100%;height:100%;object-fit:cover;display:block;background:#000}
-@media(prefers-reduced-motion:reduce){.sheet .sheet-vid{display:none}}
-
 @media (min-width:760px){
   .mosaic{
     display:grid;
@@ -510,4 +521,8 @@ body.drawer-open{overflow:hidden}
   .tile.t3,.tile.t4,.tile.t5{grid-column:span 2;display:block}
   .tile.t6{display:none}
   .tile{aspect-ratio:auto;width:auto;height:auto;flex:initial}
+  .mosaic.hero3{grid-template-columns:repeat(3,1fr);grid-auto-rows:auto}
+  .mosaic.hero3 .tile.t0,
+  .mosaic.hero3 .tile.t1,
+  .mosaic.hero3 .tile.t2{grid-column:auto;grid-row:auto;aspect-ratio:1/1}
 }
