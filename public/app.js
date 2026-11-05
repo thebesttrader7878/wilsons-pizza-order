@@ -55,7 +55,45 @@
   const PAL = [['#CF0F00', '#6e0800'], ['#1a1a1a', '#3a0600'], ['#2a0500', '#CF0F00'], ['#141414', '#4a3a10']];
   const fallback = (it, big) => { const h = [...it.id].reduce((a, c) => a + c.charCodeAt(0), 0) % PAL.length, [a, b] = PAL[h];
     return `<div class="fb ${big ? 'big' : ''}" style="--a:${a};--b:${b}"><span class="swirl">🍕</span><span class="fbn">${esc(it.name)}</span><span class="fbt">Wilson's</span></div>`; };
-  const photo = (it, cls = 'ph') => it.image ? `<div class="${cls}" style="background-image:url('/${it.image}')"></div>` : `<div class="${cls} nophoto">${fallback(it)}</div>`;
+  // Real @wilsonpizza clips (public/social/products). Gourmet pizza + Take & Bake only.
+  // Homepage social row is still SOCIAL_VIDEOS. Product photos stay as the poster.
+  const PRODUCT_VIDEOS = {
+    'sausage-delight': { id: '7653089815004466446', file: 'sausage-delight' },
+    'just-meat': { id: '7701847875797470477', file: 'just-meat' },
+    '18th': { id: '7701731294371237150', file: '18th' },
+    pepperoni: { id: '7702061460901334285', file: 'pepperoni' },
+    veggie: { id: '7374935443499994410', file: 'veggie' },
+    beef: { id: '7671819274570304781', file: 'beef' },
+    sausage: { id: '7648418685010447629', file: 'sausage' },
+    cheese: { id: '7691076922482199821', file: 'cheese' }
+  };
+  // First match wins so "Sausage Delight" does not fall through to sausage, and cheese never hits burgers or sticks.
+  const VIDEO_RULES = [
+    ['sausage-delight', n => n.includes('sausage delight')],
+    ['just-meat', n => n.includes('just meat')],
+    ['18th', n => n.includes('18th street') || n.includes('18th st')],
+    ['pepperoni', n => n.includes('pepperoni')],
+    ['veggie', n => n.includes('veggie')],
+    ['beef', n => n.includes('beef') && !n.includes('burger')],
+    ['sausage', n => n.includes('sausage')],
+    ['cheese', n => !n.includes('cheeseburger') && !n.includes('cheesestick') && (n.includes('cheese pizza') || (n.includes('take') && n.includes('bake') && n.includes('cheese')))]
+  ];
+  const itemCategory = id => { const cats = (S.menu && S.menu.categories) || []; const c = cats.find(x => (x.items || []).includes(id)); return c ? c.id : ''; };
+  const productVideo = it => {
+    if (!it || !it.id) return null;
+    const cat = itemCategory(it.id);
+    if (cat !== 'gourmet-pizza' && cat !== 'take-bake') return null;
+    const n = String(it.name || '').toLowerCase().replace(/\u2019/g, "'");
+    const hit = VIDEO_RULES.find(([, test]) => test(n));
+    return hit ? PRODUCT_VIDEOS[hit[0]] : null;
+  };
+  const photo = (it, cls = 'ph', big = false) => {
+    const vid = productVideo(it);
+    const poster = it.image ? '/' + it.image : (vid ? '/social/products/' + vid.file + '.jpg' : '');
+    const bg = poster ? ` style="background-image:url('${poster}')"` : '';
+    if (vid) return `<div class="${cls} hasvid"${bg} data-video="${vid.file}"><video class="ph-vid" muted loop playsinline preload="none" poster="${esc(poster)}" data-src="/social/products/${vid.file}.mp4" data-tiktok="${vid.id}" aria-hidden="true"></video></div>`;
+    return it.image ? `<div class="${cls}"${bg}></div>` : `<div class="${cls} nophoto">${fallback(it, big)}</div>`;
+  };
 
   const hasRequired = it => (it.modifiers || []).some(g => g.required);
   const itemCard = (id, popular) => { const it = item(id); if (!it || it.hidden) return ''; const so = it.soldOut;
@@ -175,14 +213,14 @@
   const renderModal = () => { const it = item(M.id), unit = lineUnit(it, M.sel), ok = modalValid(it);
     modalY = window.scrollY; $('#modal').hidden = false; document.body.style.overflow = 'hidden';
     $('#modal').innerHTML = `<div class="sheet" role="dialog" aria-label="${esc(it.name)}" data-testid="itemmodal">
-      <div class="grab"></div><div class="img">${it.image ? `<div class="ph" style="background-image:url('/${it.image}')"></div>` : fallback(it, true)}<button class="x" data-act="close" aria-label="Close">×</button></div>
+      <div class="grab"></div><div class="img">${photo(it, 'ph', true)}<button class="x" data-act="close" aria-label="Close">×</button></div>
       <div class="bd"><div><h3>${esc(it.name)}</h3><p class="d">${esc(it.description)}</p><b>${fromPrice(it) > it.price ? 'From ' + m(fromPrice(it)) : m(it.price)}</b></div>
       ${(it.modifiers || []).map(g => `<div class="mg"><div class="h"><span>${esc(g.name)}${g.type !== 'single' && g.max ? ` <small class="fine">(${g.min && g.min === g.max ? 'pick ' + g.max : 'up to ' + g.max})</small>` : ''}</span>${g.required ? '<span class="req">Required</span>' : '<span class="opt2">Optional</span>'}</div>
         ${g.options.map((o, oi) => `<label class="opt"><input type="${g.type === 'single' ? 'radio' : 'checkbox'}" name="g_${g.id}" data-g="${g.id}" data-oi="${oi}" ${(M.sel[g.id] || []).includes(oi) ? 'checked' : ''} data-testid="opt-${g.id}-${oi}"><span>${esc(o.name)}</span>${o.price ? (it.price ? '+' : '') + m(o.price) : ''}</label>`).join('')}</div>`).join('')}
       <label class="f">Special requests<textarea rows="2" data-in="note" placeholder="No onions, extra pickles...">${esc(M.note)}</textarea></label></div>
       <div class="sbar"><div class="qty"><button data-act="mq" data-d="-1" aria-label="less">−</button><b data-testid="mqty">${M.qty}</b><button data-act="mq" data-d="1" aria-label="more">+</button></div>
       <button class="btn grow" data-act="add" data-testid="addtocart" ${ok ? '' : 'disabled'}>${ok ? 'Add to order · ' + m(unit * M.qty) : 'Pick the required options'}</button></div></div>`;
-    bindSheetSwipe(); };
+    bindSheetSwipe(); initSocialVideos(); };
   let modalY = 0;
   const bindSheetSwipe = () => {
     const sheet = document.querySelector('#modal .sheet'); if (!sheet) return;
@@ -369,7 +407,7 @@
 
   let socialObs = null;
   const initSocialVideos = () => {
-    const vids = document.querySelectorAll('video.sv-el[data-src]');
+    const vids = document.querySelectorAll('video.sv-el[data-src], video.ph-vid[data-src]');
     if (!vids.length) return;
     if (socialObs) { socialObs.disconnect(); socialObs = null; }
     const load = v => { if (!v.src) { v.src = v.dataset.src; v.load(); } };
