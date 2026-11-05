@@ -17,3 +17,15 @@ Authorized PUSH LIVE by Seven (t369u / t370u).
 - Preserve existing Render env vars
 
 Executor cannot LaunchCloudAgent; parent must push via CloudAgent + tarball then verify live.
+
+## Customer social proof (Nov 5)
+- 6 real TikTok clips from wilsonspizzaandgrill.net (Shopify CDN mp4 + posters; @wilsonpizza)
+- Horizontal snap carousel after proof strip / before catnav; lazy play-on-view
+- Hero polish: "Made for the creek" + See the hype CTA
+- Tarball: `/workspace/webdev/wilsons-order-ux-deploy.tgz`
+- Screenshots: `/workspace/webdev/wilsons-customer-shots/`
+
+## Hero mosaic mobile fix (Nov 5)
+- Replaced cramped 4-col grid (negative margin + hero overflow:hidden clipped tiles on iPhone Safari)
+- Mobile: horizontal snap carousel of full 1:1 cards; desktop keeps mosaic grid
+- Safe-area padding on wrap/hero; trailing pad + edge fade so scroll affordance is clear
