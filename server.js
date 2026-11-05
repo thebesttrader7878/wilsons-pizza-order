@@ -26,7 +26,7 @@ const transport = smtpReady ? nodemailer.createTransport({ host: SMTP_HOST, port
 
 // ---------- Stripe Connect (Standard, OAuth) ----------
 const STRIPE_LIVE = !!(env.STRIPE_CLIENT_ID && env.STRIPE_SECRET_KEY);
-const PLATFORM_FEE_CENTS = Math.max(0, parseInt(env.PLATFORM_FEE_CENTS || '0', 10) || 0); // platform fee per card order, taken as application_fee_amount on direct charges
+const PLATFORM_FEE_CENTS = Math.max(0, parseInt(env.PLATFORM_FEE_CENTS ?? '150', 10) || 0); // default $1.50 (150) when unset; set PLATFORM_FEE_CENTS=0 to disable. platform fee per card order, taken as application_fee_amount on direct charges
 const stripeApi = async (method, p, params, account) => {
   const r = await fetch('https://api.stripe.com' + p, { method, headers: Object.assign({ Authorization: 'Bearer ' + env.STRIPE_SECRET_KEY, 'Content-Type': 'application/x-www-form-urlencoded' }, account ? { 'Stripe-Account': account } : {}), body: params ? new URLSearchParams(params).toString() : undefined, signal: AbortSignal.timeout(15000) });
   const j = await r.json(); if (!r.ok) throw new Error((j.error && j.error.message) || 'Stripe error ' + r.status); return j;
