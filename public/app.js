@@ -245,8 +245,9 @@
   const openItem = id => { const it = item(id); M = { id, qty: 1, sel: {}, note: '' };
     (it.modifiers || []).forEach(g => {
       M.sel[g.id] = [];
-      // Required single groups: preselect cheapest option so Add is ready faster
-      if (g.required && g.type === 'single' && g.options && g.options.length) {
+      // Required single groups: preselect the cheapest option so Add is ready faster.
+      // preselect:false skips that default so the customer has to tap a topping.
+      if (g.required && g.type === 'single' && g.preselect !== false && g.options && g.options.length) {
         let best = 0;
         for (let i = 1; i < g.options.length; i++) if ((+g.options[i].price || 0) < (+g.options[best].price || 0)) best = i;
         M.sel[g.id] = [best];

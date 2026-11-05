@@ -6,7 +6,7 @@ SH="/workspace/webdev/shots-wilsons/"+TAG+"-"
 M=json.load(open('public/menu.json'))
 res=[]
 def ok(n,c): res.append((n,bool(c))); print(('PASS ' if c else 'FAIL ')+n,flush=True)
-pz=[k for k,v in M['items'].items() if v['name'].startswith('Ex Large 3 Topping')][0]; P=M['items'][pz]
+pz='ex-large-3-topping-pizza-16'; P=M['items'][pz]
 with sync_playwright() as p:
     b=p.chromium.launch(executable_path="/usr/bin/google-chrome")
     errs=[]
@@ -24,13 +24,15 @@ with sync_playwright() as p:
     pg.evaluate("document.querySelector('#c-pizza').scrollIntoView()"); pg.wait_for_timeout(800); pg.screenshot(path=SH+'02-pizza-section.png')
     y0=pg.evaluate('scrollY')
     pg.click(f'#c-pizza [data-testid=item-{pz}]'); pg.wait_for_selector('[data-testid=itemmodal]')
-    g1=[g for g in P['modifiers'] if g['name']=='Choose 1 Topping'][0]; g2=[g for g in P['modifiers'] if g['name']=='2nd Pizza Toppings'][0]
+    size=[g for g in P['modifiers'] if g['name']=='Pizza Size Choice'][0]
+    tops=[g for g in P['modifiers'] if g['name']=='Choose 3 Toppings'][0]
     ok('required blocks add', pg.is_disabled('[data-testid=addtocart]'))
-    pg.click(f'[data-testid=opt-{g1["id"]}-0]')
-    for i in range(4): pg.click(f'[data-testid=opt-{g2["id"]}-{i}]')
-    ok('max 3 toppings enforced', pg.locator(f'input[data-g={g2["id"]}]:checked').count()==3)
+    for i in range(4): pg.click(f'[data-testid=opt-{tops["id"]}-{i}]')
+    ok('max 3 toppings enforced', pg.locator(f'input[data-g={tops["id"]}]:checked').count()==3)
+    xl=next(i for i,o in enumerate(size['options']) if o['name'].startswith('16'))
+    pg.click(f'[data-testid=opt-{size["id"]}-{xl}]')
     pg.screenshot(path=SH+'03-item-options.png')
-    exp=P['price']+g1['options'][0]['price']+sum(g2['options'][i]['price'] for i in range(3))
+    exp=P['price']+size['options'][xl]['price']+sum(tops['options'][i]['price'] for i in range(3))
     ok(f'price {exp:.2f}', f'${exp:.2f}' in pg.inner_text('[data-testid=addtocart]'))
     pg.click('[data-testid=addtocart]'); pg.wait_for_timeout(600)
     y1=pg.evaluate('scrollY'); ok(f'no scroll to top after add ({y0}->{y1})', abs(y1-y0)<60 and y1>300)
@@ -45,7 +47,7 @@ with sync_playwright() as p:
     pg.wait_for_selector(f'[data-testid=order-{oid}]',timeout=20000); ok('order in /owner', True)
     pg.screenshot(path=SH+'06-owner.png')
     pg.click(f'[data-testid=order-{oid}]'); pg.wait_for_selector('[data-testid=order-detail]')
-    ok('mods on ticket', g2['options'][0]['name'] in pg.inner_text('[data-testid=order-detail]'))
+    ok('mods on ticket', tops['options'][0]['name'] in pg.inner_text('[data-testid=order-detail]'))
     pg.click('[data-testid=cancel-open]'); pg.fill('[data-testid=cancel-reason]','Test order, ignore'); pg.click('[data-testid=cancel-confirm]'); pg.wait_for_timeout(1500)
     ok('test order canceled', 'cancel' in pg.inner_text('[data-testid=order-detail]').lower())
     pg.screenshot(path=SH+'07-owner-canceled.png')
