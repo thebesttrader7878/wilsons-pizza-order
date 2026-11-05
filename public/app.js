@@ -81,9 +81,9 @@
   const HERO = ['18th-street-special-regular-crust', 'just-meat-stuffed-crust', 'chicken-wings', 'double-cheeseburger', 'garlic-cheesesticks', 'beef-calzone', 'bad-azz-fish-sandwich'];
   // Real TikTok clips from wilsonspizzaandgrill.net (Shopify CDN mp4s + posters). No AI fakes.
   const SOCIAL_VIDEOS = [
-    { id: '7631636734610050335', label: 'Packed in KC', caption: 'How we ship cold & fresh',
-      poster: 'https://cdn.shopify.com/s/files/1/0933/4184/3778/files/poster-7631636734610050335.jpg',
-      src: 'https://cdn.shopify.com/videos/c/vp/885a22fa69a949088036e4f08cc63a6d/885a22fa69a949088036e4f08cc63a6d.HD-720p-1.6Mbps-99823109.mp4' },
+    { id: '7699089798325128462', label: 'Double Decker', caption: 'One pie. Pure Wilson\'s.',
+      poster: '/social/double-decker.jpg',
+      src: '/social/double-decker.mp4' },
     { id: '7618239108057517342', label: 'Bake it your way', caption: 'How to cook your pizza',
       poster: 'https://cdn.shopify.com/s/files/1/0933/4184/3778/files/poster-7618239108057517342.jpg',
       src: 'https://cdn.shopify.com/videos/c/vp/690689f1e02d4b5b9e000ac5d3738315/690689f1e02d4b5b9e000ac5d3738315.HD-720p-1.6Mbps-99823108.mp4' },
