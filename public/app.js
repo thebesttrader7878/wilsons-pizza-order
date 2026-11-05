@@ -55,23 +55,26 @@
   const PAL = [['#CF0F00', '#6e0800'], ['#1a1a1a', '#3a0600'], ['#2a0500', '#CF0F00'], ['#141414', '#4a3a10']];
   const fallback = (it, big) => { const h = [...it.id].reduce((a, c) => a + c.charCodeAt(0), 0) % PAL.length, [a, b] = PAL[h];
     return `<div class="fb ${big ? 'big' : ''}" style="--a:${a};--b:${b}"><span class="swirl">🍕</span><span class="fbn">${esc(it.name)}</span><span class="fbt">Wilson's</span></div>`; };
-  // Real @wilsonpizza clips (public/social/products). Gourmet pizza + Take & Bake only.
-  // Homepage social row is still SOCIAL_VIDEOS. Product photos stay as the poster.
+  // Clips in public/social/products. Gourmet pizza + Take & Bake only, and only on a name match.
+  // User clips replace the old TikTok files for Double Decker, stuffed pepperoni, and sausage.
+  // Cards use the catalog still. Unmatched items stay on that still, with no clip.
   const PRODUCT_VIDEOS = {
-    'sausage-delight': { id: '7653089815004466446', file: 'sausage-delight' },
+    'double-decker': { file: 'double-decker' },
     'just-meat': { id: '7701847875797470477', file: 'just-meat' },
     '18th': { id: '7701731294371237150', file: '18th' },
+    'pepperoni-stuffed': { file: 'pepperoni-stuffed' },
     pepperoni: { id: '7702061460901334285', file: 'pepperoni' },
     veggie: { id: '7374935443499994410', file: 'veggie' },
     beef: { id: '7671819274570304781', file: 'beef' },
-    sausage: { id: '7648418685010447629', file: 'sausage' },
+    sausage: { file: 'sausage' },
     cheese: { id: '7691076922482199821', file: 'cheese' }
   };
-  // First match wins so "Sausage Delight" does not fall through to sausage, and cheese never hits burgers or sticks.
+  // First match wins. Stuffed pepperoni is not the plain pepperoni clip. Cheese never hits burgers or sticks.
   const VIDEO_RULES = [
-    ['sausage-delight', n => n.includes('sausage delight')],
+    ['double-decker', n => n.includes('double decker')],
     ['just-meat', n => n.includes('just meat')],
     ['18th', n => n.includes('18th street') || n.includes('18th st')],
+    ['pepperoni-stuffed', n => n.includes('pepperoni') && n.includes('stuffed')],
     ['pepperoni', n => n.includes('pepperoni')],
     ['veggie', n => n.includes('veggie')],
     ['beef', n => n.includes('beef') && !n.includes('burger')],
@@ -88,11 +91,15 @@
     return hit ? PRODUCT_VIDEOS[hit[0]] : null;
   };
   const photo = (it, cls = 'ph', big = false) => {
-    const vid = productVideo(it);
-    const poster = it.image ? '/' + it.image : (vid ? '/social/products/' + vid.file + '.jpg' : '');
-    const bg = poster ? ` style="background-image:url('${poster}')"` : '';
-    if (vid) return `<div class="${cls} hasvid"${bg} data-video="${vid.file}"><video class="ph-vid" muted loop playsinline preload="none" poster="${esc(poster)}" data-src="/social/products/${vid.file}.mp4" data-tiktok="${vid.id}" aria-hidden="true"></video></div>`;
-    return it.image ? `<div class="${cls}"${bg}></div>` : `<div class="${cls} nophoto">${fallback(it, big)}</div>`;
+    // Cards use the catalog still only, never a clip poster. The 9:16 clip plays in the opened sheet.
+    const vid = big ? productVideo(it) : null;
+    const still = it.image ? '/' + it.image : '';
+    const poster = still || (vid ? '/social/products/' + vid.file + '.jpg' : '');
+    const shown = big ? poster : still;
+    const bg = shown ? ` style="background-image:url('${shown}')"` : '';
+    const tik = vid && vid.id ? ` data-tiktok="${vid.id}"` : '';
+    if (vid) return `<div class="${cls} hasvid"${bg} data-video="${vid.file}"><video class="ph-vid" muted loop playsinline preload="none" poster="${esc(poster)}" data-src="/social/products/${vid.file}.mp4"${tik} aria-hidden="true"></video></div>`;
+    return still ? `<div class="${cls}"${bg}></div>` : `<div class="${cls} nophoto">${fallback(it, big)}</div>`;
   };
 
   const hasRequired = it => (it.modifiers || []).some(g => g.required);
@@ -116,12 +123,16 @@
 
   // Real DoorDash rating snippets seen on her store page (Oct 2026). No invented reviews.
   const DDR = { '18th-street-special-regular-crust': '96% (31)', 'just-meat-stuffed-crust': '100% (18)', 'triple-cheeseburger': '82% (28)', 'chicken-wings': '84% (32)' };
-  const HERO = ['18th-street-special-regular-crust', 'just-meat-stuffed-crust', 'chicken-wings', 'double-cheeseburger', 'garlic-cheesesticks', 'beef-calzone', 'bad-azz-fish-sandwich'];
+  const HERO = [
+    { id: '18th-street-special-regular-crust', image: 'img/hero-18th-street.jpg' },
+    { id: 'just-meat-stuffed-crust', image: 'img/hero-just-meat.jpg' },
+    { id: 'pepperoni-delight-stuffed-crust', image: 'img/hero-pepperoni-stuffed.jpg' }
+  ];
   // Real TikTok clips from wilsonspizzaandgrill.net (Shopify CDN mp4s + posters). No AI fakes.
   const SOCIAL_VIDEOS = [
     { id: '7699089798325128462', label: 'Double Decker', caption: 'One pie. Pure Wilson\'s.',
-      poster: '/social/double-decker.jpg',
-      src: '/social/double-decker.mp4' },
+      poster: '/social/products/double-decker.jpg',
+      src: '/social/products/double-decker.mp4' },
     { id: '7618239108057517342', label: 'Bake it your way', caption: 'How to cook your pizza',
       poster: 'https://cdn.shopify.com/s/files/1/0933/4184/3778/files/poster-7618239108057517342.jpg',
       src: 'https://cdn.shopify.com/videos/c/vp/690689f1e02d4b5b9e000ac5d3738315/690689f1e02d4b5b9e000ac5d3738315.HD-720p-1.6Mbps-99823108.mp4' },
@@ -159,8 +170,8 @@
         </div>
       </div>
     </section>`;
-  const mosaic = () => { const its = HERO.map(item).filter(x => x && x.image && !x.hidden);
-    return `<div class="mosaic" data-testid="hero-photos">${its.map((it, i) => `<button class="tile t${i}" data-act="open" data-id="${it.id}" style="background-image:url('/${it.image}')" aria-label="${esc(it.name)}"><span>${esc(it.name) + ' · ' + m(it.price)}</span></button>`).join('')}</div>`; };
+  const mosaic = () => { const its = HERO.map(h => { const it = item(h.id); return it && !it.hidden ? Object.assign({}, it, { image: h.image }) : null; }).filter(Boolean);
+    return `<div class="mosaic hero3" data-testid="hero-photos">${its.map((it, i) => `<button class="tile t${i}" data-act="open" data-id="${it.id}" style="background-image:url('/${it.image}')" aria-label="${esc(it.name)}"><span>${esc(it.name) + ' · ' + m(it.price)}</span></button>`).join('')}</div>`; };
   const ddBtn = (s, where) => `<a class="btn dd" href="${esc(s.doordashUrl)}" target="_blank" rel="noopener" data-testid="dd-${where}">🚗 Want delivery? Order on DoorDash</a>`;
   const CATICON = { beverages: '🥤', deserts: '🍰', fish: '🐟', 'combo-deals': '⭐', tshirts: '🧢', chicken: '🍗', 'take-bake': '📦' };
   const catTiles = cats => `<section class="cats reveal" data-testid="cattiles"><div class="sech"><span class="kicker">Browse</span><h2>What are you craving?</h2></div><div class="ctiles">${cats.map(c => { const ph = c.items.map(item).find(x => x && x.image && !x.hidden);
