@@ -229,18 +229,44 @@
     "ex-large-3-topping-pizza-16": {
       "id": "ex-large-3-topping-pizza-16",
       "doordashId": "24829971",
-      "name": "Ex Large 3 Topping Pizza (16\")",
-      "description": "16\" pizza with choice of 3 toppings from a diverse selection including meats (beef, ham, pepperoni, grilled chicken breast), vegetables (basil, green peppers, lettuce, mushrooms, onions, tomatoes), BBQ sauce base, house blend mozzarella.",
-      "price": 22.99,
+      "name": "3 Topping Pizza",
+      "description": "Choose a size and exactly 3 toppings. Meats, veggies, basil, BBQ sauce base, or house blend mozzarella.",
+      "price": 13.99,
       "image": "img/ex-large-3-topping-pizza-16.jpg",
       "modifiers": [
         {
-          "id": "g5519490",
-          "name": "Choose 1 Topping",
+          "id": "g5544114",
+          "name": "Pizza Size Choice",
           "type": "single",
           "required": true,
           "min": 1,
           "max": 1,
+          "options": [
+            {
+              "name": "12 \" Medium",
+              "price": 0.0
+            },
+            {
+              "name": "14\" Large",
+              "price": 4.0
+            },
+            {
+              "name": "16\" X-large",
+              "price": 9.0
+            },
+            {
+              "name": "18\" Jumbo",
+              "price": 15.0
+            }
+          ]
+        },
+        {
+          "id": "choose-3-toppings",
+          "name": "Choose 3 Toppings",
+          "type": "multi",
+          "required": true,
+          "min": 3,
+          "max": 3,
           "options": [
             {
               "name": "Basil",
@@ -305,72 +331,6 @@
           ]
         },
         {
-          "id": "g5547135",
-          "name": "2nd Pizza Toppings",
-          "type": "multi",
-          "required": true,
-          "min": 3,
-          "max": 3,
-          "options": [
-            {
-              "name": "Basil",
-              "price": 0.0
-            },
-            {
-              "name": "BBQ Sauce Base",
-              "price": 0.0
-            },
-            {
-              "name": "Beef",
-              "price": 0.0
-            },
-            {
-              "name": "Black Olives",
-              "price": 0.0
-            },
-            {
-              "name": "Green Peppers",
-              "price": 0.0
-            },
-            {
-              "name": "Grilled Chicken Breast",
-              "price": 0.0
-            },
-            {
-              "name": "Ham",
-              "price": 0.0
-            },
-            {
-              "name": "House Blend Mozzarella",
-              "price": 0.0
-            },
-            {
-              "name": "Italian Sausage",
-              "price": 0.0
-            },
-            {
-              "name": "Lettuce",
-              "price": 0.0
-            },
-            {
-              "name": "Mushrooms",
-              "price": 0.0
-            },
-            {
-              "name": "Onions",
-              "price": 0.0
-            },
-            {
-              "name": "Pepperoni",
-              "price": 0.0
-            },
-            {
-              "name": "Tomatoes",
-              "price": 0.0
-            }
-          ]
-        },
-        {
           "id": "g875859635",
           "name": "Extra Cheese",
           "type": "multi",
@@ -389,16 +349,43 @@
     "extra-large-16-inch-1-topping-pizza": {
       "id": "extra-large-16-inch-1-topping-pizza",
       "doordashId": "24830752",
-      "name": "Extra Large 16 Inch 1 Topping Pizza",
-      "description": "Extra large 16\" pizza with choice of one topping: basil, BBQ, meats, veggies, or house blend mozzarella.",
-      "price": 19.99,
-      "image": "img/extra-large-16-inch-1-topping-pizza.jpg",
+      "name": "1 Topping Pizza",
+      "description": "Choose a size and exactly 1 topping. Meats, veggies, basil, BBQ sauce base, or house blend mozzarella.",
+      "price": 10.99,
+      "image": "img/1-topping-pizza.jpg",
       "modifiers": [
         {
-          "id": "g5519490",
+          "id": "g5544114",
+          "name": "Pizza Size Choice",
+          "type": "single",
+          "required": true,
+          "min": 1,
+          "max": 1,
+          "options": [
+            {
+              "name": "12 \" Medium",
+              "price": 0.0
+            },
+            {
+              "name": "14\" Large",
+              "price": 4.0
+            },
+            {
+              "name": "16\" X-large",
+              "price": 9.0
+            },
+            {
+              "name": "18\" Jumbo",
+              "price": 15.0
+            }
+          ]
+        },
+        {
+          "id": "choose-1-topping",
           "name": "Choose 1 Topping",
           "type": "single",
           "required": true,
+          "preselect": false,
           "min": 1,
           "max": 1,
           "options": [
@@ -816,10 +803,80 @@
     "double-decker": {
       "id": "double-decker",
       "name": "Double Decker",
-      "description": "Two layers in one pie. Pepperoni, sauce, and cheese stacked the Wilson's way.",
+      "description": "Two layers in one pie. Choose the toppings for both layers. Sauce and cheese stacked the Wilson's way.",
       "price": 38.99,
       "image": "img/double-decker.jpg",
       "modifiers": [
+        {
+          "id": "choose-toppings",
+          "name": "Choose Toppings",
+          "type": "multi",
+          "required": true,
+          "min": 1,
+          "max": 4,
+          "options": [
+            {
+              "name": "Basil",
+              "price": 0.0
+            },
+            {
+              "name": "BBQ Sauce Base",
+              "price": 0.0
+            },
+            {
+              "name": "Beef",
+              "price": 0.0
+            },
+            {
+              "name": "Black Olives",
+              "price": 0.0
+            },
+            {
+              "name": "Crisp Bacon",
+              "price": 0.0
+            },
+            {
+              "name": "Green Peppers",
+              "price": 0.0
+            },
+            {
+              "name": "Grilled Chicken Breast",
+              "price": 0.0
+            },
+            {
+              "name": "Ham",
+              "price": 0.0
+            },
+            {
+              "name": "House Blend Mozzarella",
+              "price": 0.0
+            },
+            {
+              "name": "Italian Sausage",
+              "price": 0.0
+            },
+            {
+              "name": "Lettuce",
+              "price": 0.0
+            },
+            {
+              "name": "Mushrooms",
+              "price": 0.0
+            },
+            {
+              "name": "Onions",
+              "price": 0.0
+            },
+            {
+              "name": "Pepperoni",
+              "price": 0.0
+            },
+            {
+              "name": "Tomatoes",
+              "price": 0.0
+            }
+          ]
+        },
         {
           "id": "extra-cheese",
           "name": "Extra Cheese",
