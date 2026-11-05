@@ -10,7 +10,7 @@
   const DEF_SETTINGS = {
     name: "Wilson's Pizza & Grill", phone: '(913) 621-4066', address: '1801 Quindaro Blvd, Kansas City, KS 66104',
     doordashUrl: 'https://www.doordash.com/store/wilson-s-pizza-and-grill-kansas-city-216952/',
-    taxRate: 9.125, // example rate, confirm with owner / accountant
+    taxRate: 9.125, // Kansas City, KS 66104 prepared food. PAY.taxRate keeps every order at least this.
     pickupMins: 15,
     acceptOrders: true,
     hours: DAYS.map((_, i) => ({ open: '10:00', close: '20:30', closed: i === 0 || i === 2 })) // carryout hours from wilsonspizzaandgrill.com (closed Sun and Tue)
@@ -39,10 +39,13 @@
   const lineUnit = (it, sel) => r2(it.price + (it.modifiers || []).reduce((a, g) => a + (sel[g.id] || []).reduce((b, oi) => b + (g.options[oi] ? g.options[oi].price : 0), 0), 0));
   const totals = (cart = S.cart, mode = S.mode, tip = S.tip, s = settings()) => {
     const subtotal = r2(cart.reduce((a, l) => a + l.unit * l.qty, 0));
-    const tax = r2(subtotal * s.taxRate / 100);
+    const taxRate = PAY.taxRate(s);
+    const tax = r2(subtotal * taxRate / 100);
     const deliveryFee = 0;
-    const total = r2(subtotal + tax + deliveryFee + (+tip || 0));
-    return { subtotal, tax, deliveryFee, tip: +tip || 0, total };
+    const tipAmt = r2(+tip || 0);
+    const cents = n => Math.round(n * 100);
+    const total = r2((cents(subtotal) + cents(tax) + cents(tipAmt)) / 100);
+    return { subtotal, tax, deliveryFee, tip: tipAmt, total, taxRate };
   };
   const count = () => S.cart.reduce((a, l) => a + l.qty, 0);
 
@@ -119,7 +122,7 @@
   const cartLines = (editable = true) => S.cart.length ? S.cart.map((l, i) => `<div class="line"><div class="grow"><b>${l.qty} × ${esc(l.name)}</b>${l.mods.length ? `<small>${esc(l.mods.join(', '))}</small>` : ''}${l.note ? `<small>Note: ${esc(l.note)}</small>` : ''}
     ${editable ? `<div style="display:flex;gap:6px;margin-top:6px"><button class="btn ghost sm" data-act="dec" data-i="${i}" aria-label="less">−</button><button class="btn ghost sm" data-act="inc" data-i="${i}" aria-label="more">+</button><button class="btn ghost sm" data-act="rm" data-i="${i}">Remove</button></div>` : ''}</div><b>${m(l.unit * l.qty)}</b></div>`).join('') : '<p class="fine">Your cart is empty. Go grab a pizza. 🍕</p>';
 
-  const sumHtml = t => `<div class="sum"><div><span>Subtotal</span><span>${m(t.subtotal)}</span></div><div><span>Tax</span><span>${m(t.tax)}</span></div>${t.tip ? `<div><span>Tip</span><span>${m(t.tip)}</span></div>` : ''}<div class="tot"><span>Total</span><span data-testid="total">${m(t.total)}</span></div></div>`;
+  const sumHtml = t => `<div class="sum"><div><span>Subtotal</span><span>${m(t.subtotal)}</span></div><div><span data-testid="tax-label">Sales tax (${t.taxRate || PAY.taxRate(settings())}%)</span><span data-testid="tax">${m(t.tax)}</span></div>${t.tip ? `<div><span>Tip</span><span>${m(t.tip)}</span></div>` : ''}<div class="tot"><span>Total</span><span data-testid="total">${m(t.total)}</span></div></div>`;
 
   // Real DoorDash rating snippets seen on her store page (Oct 2026). No invented reviews.
   const DDR = { '18th-street-special-regular-crust': '96% (31)', 'just-meat-stuffed-crust': '100% (18)', 'triple-cheeseburger': '82% (28)', 'chicken-wings': '84% (32)' };
@@ -397,7 +400,7 @@
       ${o.refunded > 0 ? `<span class="test" data-testid="refund-note">${full ? 'Refunded' : 'Partly refunded'}: ${m(o.refunded)} back to your ${o.payment.method === 'store' ? 'hand (cash)' : 'card'}</span>` : ''}
       <span class="fine" data-testid="placed">${esc(o.payment.label)} · updates live on this page</span></div>
       <div class="card"><h3>Receipt</h3>${o.items.map(l => `<div class="line"><div class="grow"><b>${l.qty} × ${esc(l.name)}</b>${l.mods.length ? `<small>${esc(l.mods.join(', '))}</small>` : ''}</div><b>${m(l.lineTotal)}</b></div>`).join('')}
-      <div class="sum"><div><span>Subtotal</span><span>${m(o.subtotal)}</span></div><div><span>Tax</span><span>${m(o.tax)}</span></div>${o.tip ? `<div><span>Tip</span><span>${m(o.tip)}</span></div>` : ''}<div class="tot"><span>Total</span><span data-testid="conf-total">${m(o.total)}</span></div>${o.refunded > 0 ? `<div><span>Refunded</span><span>−${m(o.refunded)}</span></div>` : ''}</div></div>
+      <div class="sum"><div><span>Subtotal</span><span>${m(o.subtotal)}</span></div><div><span>Sales tax${o.taxRate ? ' (' + o.taxRate + '%)' : ''}</span><span>${m(o.tax)}</span></div>${o.tip ? `<div><span>Tip</span><span>${m(o.tip)}</span></div>` : ''}<div class="tot"><span>Total</span><span data-testid="conf-total">${m(o.total)}</span></div>${o.refunded > 0 ? `<div><span>Refunded</span><span>−${m(o.refunded)}</span></div>` : ''}</div></div>
       <div class="card"><p style="margin:0">Questions? Call <a href="tel:${s.phone.replace(/\D/g, '')}">${esc(s.phone)}</a></p><a class="btn ghost" href="#/">Back to menu</a></div></div>`; };
 
   const io = 'IntersectionObserver' in window ? new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { rootMargin: '0px 0px -40px 0px' }) : null;

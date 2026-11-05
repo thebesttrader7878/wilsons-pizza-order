@@ -49,8 +49,8 @@ const LIMIT = { max: 5, windowMs: 15 * 60 * 1000 };
 const store = makeStore(env);
 const menu = JSON.parse(fs.readFileSync(path.join(__dirname, 'public', 'menu.json'), 'utf8'));
 const DAYS = 7;
-const DEF_SETTINGS = { taxRate: 9.125, pickupMins: 15, acceptOrders: true, pos: 'none', doordashUrl: 'https://www.doordash.com/store/wilson-s-pizza-and-grill-kansas-city-216952/', hours: Array.from({ length: DAYS }, (_, i) => ({ open: '10:00', close: '20:30', closed: i === 0 || i === 2 })) };
-const getSettings = async () => Object.assign({}, DEF_SETTINGS, await store.getKV('settings', {}));
+const DEF_SETTINGS = { taxRate: PAY.KC_SALES_TAX, pickupMins: 15, acceptOrders: true, pos: 'none', doordashUrl: 'https://www.doordash.com/store/wilson-s-pizza-and-grill-kansas-city-216952/', hours: Array.from({ length: DAYS }, (_, i) => ({ open: '10:00', close: '20:30', closed: i === 0 || i === 2 })) };
+const getSettings = async () => { const s = Object.assign({}, DEF_SETTINGS, await store.getKV('settings', {})); s.taxRate = PAY.taxRate(s); return s; };
 const getEdits = async () => store.getKV('menuEdits', {});
 const getStripe = async () => { const st = await store.getKV('stripe', { status: 'none' }); if (st.status !== 'connected' && STRIPE_LIVE && /^acct_[A-Za-z0-9]+$/.test(env.STRIPE_ACCOUNT_ID || '')) return { status: 'connected', id: env.STRIPE_ACCOUNT_ID, demo: false, fromEnv: true }; return st; };
 
@@ -90,7 +90,33 @@ function priceCart(lines, edits) {
     return { id: l.id, name: it.name, qty, unit, mods, note: clean(l.note, 200), lineTotal: r2(unit * qty) };
   });
 }
-const totalsFor = (items, taxRate, tipIn) => { const subtotal = r2(items.reduce((a, l) => a + l.lineTotal, 0)); const tax = r2(subtotal * taxRate / 100); const tip = Math.min(r2(Math.max(0, +tipIn || 0)), subtotal); return { subtotal, tax, tip, deliveryFee: 0, total: r2(subtotal + tax + tip) }; };
+const totalsFor = (items, taxRate, tipIn) => {
+  const subtotal = r2(items.reduce((a, l) => a + l.lineTotal, 0));
+  const rate = PAY.taxRate({ taxRate });
+  const tax = r2(subtotal * rate / 100);
+  const tip = Math.min(r2(Math.max(0, +tipIn || 0)), subtotal);
+  const cents = n => Math.round(n * 100);
+  const total = r2((cents(subtotal) + cents(tax) + cents(tip)) / 100);
+  return { subtotal, tax, tip, deliveryFee: 0, total, taxRate: rate };
+};
+// Stripe Tax is not turned on for the connected account. Every charge still includes sales tax:
+// food, then a tax line, then a voluntary tip. The PaymentIntent amount is the sum of those cents.
+const chargeCents = t => { const c = n => Math.round((+n || 0) * 100); return { sub: c(t.subtotal), tax: c(t.tax), tip: c(t.tip), total: c(t.subtotal) + c(t.tax) + c(t.tip) }; };
+const stripeLineParams = (t, items) => {
+  const ch = chargeCents(t);
+  const lines = [{ name: NAME + ' pickup order', description: items.map(l => `${l.qty}x ${l.name}`).join(', ').slice(0, 300), amount: ch.sub }];
+  if (ch.tax > 0) lines.push({ name: 'Sales tax (' + t.taxRate + '% Kansas City, KS)', description: 'Prepared food, pickup at 1801 Quindaro Blvd', amount: ch.tax });
+  if (ch.tip > 0) lines.push({ name: 'Tip', description: 'Voluntary tip, not taxed', amount: ch.tip });
+  const p = {};
+  lines.forEach((l, i) => {
+    p['line_items[' + i + '][quantity]'] = '1';
+    p['line_items[' + i + '][price_data][currency]'] = 'usd';
+    p['line_items[' + i + '][price_data][unit_amount]'] = String(l.amount);
+    p['line_items[' + i + '][price_data][product_data][name]'] = l.name;
+    if (l.description) p['line_items[' + i + '][price_data][product_data][description]'] = l.description;
+  });
+  return { params: p, total: ch.total };
+};
 
 // ---------- notifications ----------
 function buildEmail(o, to = pickTo()) {
@@ -130,7 +156,7 @@ async function notify(o) {
 }
 
 // ---------- public API ----------
-const publicOrder = o => ({ id: o.id, created: o.created, status: o.status, when: o.when, customer: { name: o.customer.name }, items: o.items, subtotal: o.subtotal, tax: o.tax, tip: o.tip, total: o.total, refunded: o.refunded || 0, cancelReason: o.cancelReason || '', payment: { label: o.payment.label, method: o.payment.method }, updated: o.updated });
+const publicOrder = o => ({ id: o.id, created: o.created, status: o.status, when: o.when, customer: { name: o.customer.name }, items: o.items, subtotal: o.subtotal, tax: o.tax, taxRate: o.taxRate || PAY.KC_SALES_TAX, tip: o.tip, total: o.total, refunded: o.refunded || 0, cancelReason: o.cancelReason || '', payment: { label: o.payment.label, method: o.payment.method }, updated: o.updated });
 
 app.get('/api/site', async (req, res) => { const s = await getSettings(), st = await getStripe();
   res.set('Cache-Control', 'no-store');
@@ -141,8 +167,8 @@ app.get('/api/site', async (req, res) => { const s = await getSettings(), st = a
 app.post('/api/checkout/intent', async (req, res) => {
   try { const st = await getStripe(); if (!STRIPE_LIVE || st.status !== 'connected') return res.status(400).json({ ok: false, error: 'Card payments are in demo mode.' });
     const s = await getSettings(), items = priceCart(req.body.items, await getEdits()), t = totalsFor(items, s.taxRate, req.body.tip);
-    const amount = Math.round(t.total * 100), fee = PLATFORM_FEE_CENTS && PLATFORM_FEE_CENTS < amount ? PLATFORM_FEE_CENTS : 0;
-    const pi = await stripeApi('POST', '/v1/payment_intents', Object.assign({ amount, currency: 'usd', 'automatic_payment_methods[enabled]': 'true', description: NAME + ' online pickup order' }, fee ? { application_fee_amount: String(fee) } : {}), st.id);
+    const amount = chargeCents(t).total, fee = PLATFORM_FEE_CENTS && PLATFORM_FEE_CENTS < amount ? PLATFORM_FEE_CENTS : 0;
+    const pi = await stripeApi('POST', '/v1/payment_intents', Object.assign({ amount, currency: 'usd', 'automatic_payment_methods[enabled]': 'true', description: NAME + ' pickup order (includes ' + t.taxRate + '% sales tax)', 'metadata[subtotal]': t.subtotal.toFixed(2), 'metadata[tax]': t.tax.toFixed(2), 'metadata[tax_rate]': String(t.taxRate), 'metadata[tip]': t.tip.toFixed(2) }, fee ? { application_fee_amount: String(fee) } : {}), st.id);
     res.json({ ok: true, clientSecret: pi.client_secret, id: pi.id, total: t.total });
   } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
 });
@@ -152,10 +178,8 @@ app.post('/api/checkout/session', async (req, res) => {
   try { const st = await getStripe(); if (!STRIPE_LIVE || st.status !== 'connected') return res.status(400).json({ ok: false, error: 'Card payments are not set up yet. Please try again later.' });
     const s = await getSettings(); if (!s.acceptOrders) return res.status(409).json({ ok: false, error: 'We are not taking online orders right now.' });
     const items = priceCart(req.body.items, await getEdits()); if (!items.length) return res.status(400).json({ ok: false, error: 'Your cart is empty.' });
-    const t = totalsFor(items, s.taxRate, req.body.tip), amount = Math.round(t.total * 100), fee = PLATFORM_FEE_CENTS && PLATFORM_FEE_CENTS < amount ? PLATFORM_FEE_CENTS : 0;
-    const cs = await stripeApi('POST', '/v1/checkout/sessions', Object.assign({ mode: 'payment', 'line_items[0][quantity]': '1', 'line_items[0][price_data][currency]': 'usd', 'line_items[0][price_data][unit_amount]': String(amount),
-      'line_items[0][price_data][product_data][name]': NAME + ' pickup order', 'line_items[0][price_data][product_data][description]': items.map(l => `${l.qty}x ${l.name}`).join(', ').slice(0, 300) + ` (incl. tax${t.tip ? ' & tip' : ''})`,
-      success_url: SITE_URL + '/#/paid?cs={CHECKOUT_SESSION_ID}', cancel_url: SITE_URL + '/#/checkout', 'payment_intent_data[description]': NAME + ' online pickup order' }, fee ? { 'payment_intent_data[application_fee_amount]': String(fee) } : {}), st.id);
+    const t = totalsFor(items, s.taxRate, req.body.tip), lines = stripeLineParams(t, items), amount = lines.total, fee = PLATFORM_FEE_CENTS && PLATFORM_FEE_CENTS < amount ? PLATFORM_FEE_CENTS : 0;
+    const cs = await stripeApi('POST', '/v1/checkout/sessions', Object.assign({ mode: 'payment', success_url: SITE_URL + '/#/paid?cs={CHECKOUT_SESSION_ID}', cancel_url: SITE_URL + '/#/checkout', 'payment_intent_data[description]': NAME + ' pickup order (includes ' + t.taxRate + '% sales tax)', 'payment_intent_data[metadata][subtotal]': t.subtotal.toFixed(2), 'payment_intent_data[metadata][tax]': t.tax.toFixed(2), 'payment_intent_data[metadata][tax_rate]': String(t.taxRate), 'payment_intent_data[metadata][tip]': t.tip.toFixed(2) }, lines.params, fee ? { 'payment_intent_data[application_fee_amount]': String(fee) } : {}), st.id);
     res.json({ ok: true, url: cs.url, id: cs.id, total: t.total });
   } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
 });
@@ -208,7 +232,7 @@ app.post('/api/orders', async (req, res) => {
       if (!/^pi_[A-Za-z0-9]+$/.test(piId)) return res.status(400).json({ ok: false, error: 'Payment missing.' });
       if (usedPI.has(piId) || (await store.listOrders({ from: new Date(now - 3 * 864e5).toISOString() })).some(x => x.payment && x.payment.id === piId)) return res.status(409).json({ ok: false, error: 'This payment was already used for an order.' });
       const pi = await stripeApi('GET', '/v1/payment_intents/' + encodeURIComponent(piId), null, st.id);
-      if (pi.status !== 'succeeded' || pi.amount !== Math.round(t.total * 100)) return res.status(402).json({ ok: false, error: 'Payment did not go through.' });
+      if (pi.status !== 'succeeded' || pi.amount !== chargeCents(t).total) return res.status(402).json({ ok: false, error: 'Payment did not go through.' });
       usedPI.add(pi.id); payment = { method: 'card', label: 'Card (Stripe' + (/^sk_test_/.test(env.STRIPE_SECRET_KEY) ? ' test' : '') + ')', id: pi.id, fee: PAY.cardFee(t.total), live: true, account: st.id, platformFee: (pi.application_fee_amount || 0) / 100 };
     } else {
       if (!/^pi_demo_[a-z0-9]{6,20}$/.test(String(p.id || ''))) return res.status(400).json({ ok: false, error: 'Payment missing.' });
@@ -347,7 +371,7 @@ app.put('/api/admin/settings', async (req, res) => {
   const cur = await getSettings(), b = req.body || {}, n = Object.assign({}, cur);
   if (Array.isArray(b.hours) && b.hours.length === 7) { if (!b.hours.every(h => TIME_RE.test(h.open) && TIME_RE.test(h.close))) return res.status(400).json({ ok: false, error: 'Hours need a valid time.' }); n.hours = b.hours.map(h => ({ open: h.open, close: h.close, closed: !!h.closed })); }
   if (b.pickupMins != null) n.pickupMins = Math.min(180, Math.max(1, Math.round(+b.pickupMins || 15)));
-  if (b.taxRate != null) { const t = +b.taxRate; if (!(t >= 0 && t < 20)) return res.status(400).json({ ok: false, error: 'Tax rate looks off.' }); n.taxRate = t; }
+  if (b.taxRate != null) { const t = +b.taxRate; if (!(t >= 0 && t < 20)) return res.status(400).json({ ok: false, error: 'Tax rate looks off.' }); n.taxRate = PAY.taxRate({ taxRate: t }); }
   if (b.doordashUrl != null) { if (b.doordashUrl && !/^https:\/\/(www\.)?doordash\.com\//.test(b.doordashUrl)) return res.status(400).json({ ok: false, error: 'DoorDash link must start with https://www.doordash.com/' }); n.doordashUrl = String(b.doordashUrl).slice(0, 300); }
   if (b.acceptOrders != null) n.acceptOrders = !!b.acceptOrders;
   if (b.pos != null && POS.ADAPTERS[b.pos]) n.pos = b.pos;
@@ -400,4 +424,4 @@ app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.ht
 
 const ready = store.init();
 if (require.main === module) ready.then(() => app.listen(PORT, () => console.log(`${NAME} on :${PORT} (store ${store.kind}, smtp ${smtpReady ? 'on' : 'off'}, stripe ${STRIPE_LIVE ? 'live' : 'demo'}, owner login ${OWNER_HASH ? 'on' : 'OFF'})`))).catch(e => { console.error('Store init failed:', e); process.exit(1); });
-module.exports = { app, ready, store, buildEmail, webhookFields, priceCart, summarize, localParts };
+module.exports = { app, ready, store, buildEmail, webhookFields, priceCart, totalsFor, chargeCents, stripeLineParams, summarize, localParts };

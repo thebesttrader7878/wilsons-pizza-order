@@ -6,6 +6,10 @@
   const r2 = n => Math.round(n * 100) / 100;
   const PAY = {
     TEST_CARD: '4242 4242 4242 4242',
+    // Pickup at 1801 Quindaro Blvd, Kansas City, KS 66104. Prepared food (not the grocery rate):
+    // 6.5% Kansas + 1% Wyandotte County + 1.625% Kansas City. Voluntary tips are not taxed.
+    KC_SALES_TAX: 9.125,
+    taxRate: s => { const t = +(s && s.taxRate); return t >= 9.125 && t < 20 ? t : 9.125; },
     cardFee: amt => r2(amt * 0.029 + 0.30), // Stripe standard card pricing, paid by the restaurant
     validCard: num => { const d = String(num).replace(/\D/g, ''); if (d.length < 13) return false; let s = 0, alt = false; for (let i = d.length - 1; i >= 0; i--) { let n = +d[i]; if (alt) { n *= 2; if (n > 9) n -= 9; } s += n; alt = !alt; } return s % 10 === 0; },
     // Simulated PaymentIntent. 4000 0000 0000 0002 is Stripe's test "declined" card, we mimic that.
