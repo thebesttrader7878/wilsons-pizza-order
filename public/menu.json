@@ -803,17 +803,18 @@
     "double-decker": {
       "id": "double-decker",
       "name": "Double Decker",
-      "description": "Two layers in one pie. Choose the toppings for both layers. Sauce and cheese stacked the Wilson's way.",
+      "description": "Two layers in one pie. Choose 1 topping for the top pizza and 1 Wilson's specialty for the bottom. Sauce and cheese stacked the Wilson's way.",
       "price": 38.99,
       "image": "img/double-decker.jpg",
       "modifiers": [
         {
-          "id": "choose-toppings",
-          "name": "Choose Toppings",
-          "type": "multi",
+          "id": "top-topping",
+          "name": "Choose 1 topping for the top",
+          "type": "single",
           "required": true,
+          "preselect": false,
           "min": 1,
-          "max": 4,
+          "max": 1,
           "options": [
             {
               "name": "Basil",
@@ -873,6 +874,49 @@
             },
             {
               "name": "Tomatoes",
+              "price": 0.0
+            }
+          ]
+        },
+        {
+          "id": "bottom-specialty",
+          "name": "Choose the bottom specialty",
+          "type": "single",
+          "required": true,
+          "preselect": false,
+          "min": 1,
+          "max": 1,
+          "options": [
+            {
+              "name": "18th Street Special",
+              "price": 0.0
+            },
+            {
+              "name": "Chicken Supreme",
+              "price": 0.0
+            },
+            {
+              "name": "BBQ Chicken",
+              "price": 0.0
+            },
+            {
+              "name": "Sausage Delight",
+              "price": 0.0
+            },
+            {
+              "name": "Bacon Lettuce and Tomatoes",
+              "price": 0.0
+            },
+            {
+              "name": "Veggie Pizza",
+              "price": 0.0
+            },
+            {
+              "name": "Pepperoni Delight",
+              "price": 0.0
+            },
+            {
+              "name": "Just Meat",
               "price": 0.0
             }
           ]
