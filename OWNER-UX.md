@@ -6,11 +6,18 @@
 - Same auth as before (OWNER_EMAIL / OWNER_PASSWORD, bcrypt, rate limit). No server changes.
 
 ## Unaccepted order re-ping
-- While any order is still `new`, the dashboard plays the ka-ching again every 60s, shows a toast
+- While any order is still `new`, the dashboard plays the ka-ching again every 5 seconds, shows a toast
   ("N orders still waiting to be accepted"), vibrates where supported, and pulses the header and new order cards.
+- The first time that order appears while the dashboard is open, the ka-ching plays immediately. Orders that
+  were already waiting when the page loaded do not all chime at that instant; the 5-second repeat covers them.
 - One loop no matter how many new orders. Stops as soon as none are `new` (accepted, canceled, etc.) or on sign-out.
-- Uses the existing sound toggle and iOS one-tap unlock. Reduced-motion users get no pulse animation.
-- Note: browsers may pause timers in a backgrounded tab or a locked phone; keep the dashboard open on screen.
+- One-time sound unlock, per browser: tapping **Sign in** plays a ka-ching and unlocks audio when the phone allows it.
+  If a gold **Tap to turn on order sounds** banner is still up after login (or after the phone blocks audio again),
+  tap that banner once. That is the only extra step. Mute is a separate button; **Sound on** plays a test chime and does not turn sound off.
+- The screen stays awake while the dashboard is open when the browser allows a wake lock, so the 5-second timer keeps firing with the tab on screen.
+  A locked phone or a tab that is not visible can still delay timers. Leave the owner tab open and the screen on.
+  If an iPhone is on silent and you still hear nothing after the tap, turn the ringer on.
+- Reduced-motion users get no pulse animation. The chime is synthesized in the browser (no audio file).
 
 ## Full dashboard dark theme
 - Same black/gold/red look on every tab: header + tab bar (frosted, gold active tab), sound bar, filter chips,
