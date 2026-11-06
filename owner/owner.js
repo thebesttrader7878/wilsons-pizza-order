@@ -24,15 +24,16 @@
   const ago = iso => { const s = (Date.now() - new Date(iso)) / 1000; return s < 60 ? 'just now' : s < 3600 ? Math.floor(s / 60) + ' min ago' : fmtDay(iso) + ' ' + fmtTime(iso); };
 
   const LS = { get: (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
-  // New-order "ka-ching" cash register sound, synthesized with Web Audio (no audio files).
-  // Browsers (iPhone Safari especially) only allow sound after a tap, so the first tap unlocks it.
-  let actx = null;
+  // New-order "ka-ching", synthesized with Web Audio (no audio file).
+  // Phones block sound until a tap, drop a 1-sample "unlock", and suspend the engine when it goes idle
+  // or the tab hides. The gold banner is the one tap that starts a real chime. A quiet oscillator keeps
+  // the engine awake while this tab is on screen, and a missed chime plays as soon as audio is running.
+  let actx = null, keeper = null, pending = false, lastPingAt = 0, pingTimer = null, wakeLock = null, wakeTryAt = 0, gestureAt = 0;
+  const pingMs = () => { const n = +window.__PING_MS; return n > 0 ? n : 5000; };
   const soundOn = () => LS.get('ctq_sound2', true); // v2 key: everyone starts with sound on
-  const unlock = () => { try { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume();
-      const b = actx.createBuffer(1, 1, 22050), s = actx.createBufferSource(); s.buffer = b; s.connect(actx.destination); s.start(0); } catch (e) {}
-    const p = $('[data-testid=sound-prompt]'); if (p && actx && actx.state !== 'suspended') p.remove(); };
-  document.addEventListener('pointerdown', unlock); document.addEventListener('touchend', unlock); document.addEventListener('keydown', unlock);
   const audioReady = () => !!actx && actx.state === 'running';
+  const newCount = () => (S.me ? S.orders.filter(o => o.status === 'new').length : 0);
+  const dueRepeat = () => !!(S.me && newCount() && lastPingAt && Date.now() - lastPingAt >= pingMs() - 40);
   // Original synthesized cash register "ka-ching": drawer clunk + coin rattle, then a bright shimmering bell (~1.3s).
   // Same function renders the preview WAV offline (window.CTQ_KACHING with an OfflineAudioContext).
   const kachingInto = (ac, t0) => { const sr = ac.sampleRate, comp = ac.createDynamicsCompressor(), out = ac.createGain();
@@ -50,9 +51,127 @@
     [[tb, 1], [tb + .055, .55]].forEach(([t, a]) => { parts.forEach(([r, v, dec]) => [-2.2, 2.2].forEach(dt => tone(t, f0 * r + dt * r, v * a * .55, dec * (a < 1 ? .8 : 1)))); burst(t, .012, 7000, 1, .6 * a, 2); });
     return 1.45; };
   window.CTQ_KACHING = kachingInto;
-  const kaching = () => { if (!actx) return; kachingInto(actx, actx.currentTime + .02); };
-  const chime = () => { window.__chimes = (window.__chimes || 0) + 1; if (!soundOn()) return; window.__played = (window.__played || 0) + (audioReady() ? 1 : 0); if (actx) { if (actx.state === 'suspended') actx.resume(); kaching(); } };
-  const soundBar = () => !S.me ? '' : `<div class="sndbar"><button class="chip ${soundOn() ? 'on' : ''}" data-act="sound" data-testid="sound-toggle" aria-pressed="${soundOn()}">${soundOn() ? '🔔 Sound on' : '🔕 Sound off'}</button>${soundOn() && !audioReady() ? '<button class="chip warn" data-act="sound-enable" data-testid="sound-prompt">🔈 Tap to enable sound</button>' : ''}</div>`;
+  const soundGate = () => {
+    if (!S.me || (soundOn() && audioReady())) return '';
+    const title = soundOn() ? 'Tap to turn on order sounds' : 'Order sounds are off. Tap to turn them on.';
+    return `<button type="button" class="soundgate" data-act="sound-enable" data-testid="sound-prompt">${title}<small>One tap on this phone or tablet. New orders play a ka-ching right away, then again every 5 seconds until you tap Accept.</small></button>`;
+  };
+  const soundBar = () => !S.me ? '' : `<div class="sndbar"><button type="button" class="chip ${soundOn() && audioReady() ? 'on' : ''}" data-act="sound-test" data-testid="sound-toggle" aria-pressed="${soundOn() && audioReady() ? 'true' : 'false'}">${!soundOn() ? '🔕 Sound off' : audioReady() ? '🔔 Sound on' : '🔔 Sound blocked'}</button>${soundOn() ? '<button type="button" class="chip" data-act="sound-mute" data-testid="sound-mute">Mute</button>' : ''}</div>`;
+  const updateSoundGate = () => {
+    const main = document.querySelector('main.main'); if (!main || !S.me) return;
+    const cur = document.querySelector('[data-testid=sound-prompt]');
+    if (soundOn() && audioReady()) { if (cur) cur.remove(); }
+    else if (!cur && soundGate()) main.insertAdjacentHTML('afterbegin', soundGate());
+    const toggle = document.querySelector('[data-testid=sound-toggle]');
+    if (toggle) {
+      const on = soundOn() && audioReady();
+      toggle.classList.toggle('on', on);
+      toggle.setAttribute('aria-pressed', on ? 'true' : 'false');
+      toggle.textContent = !soundOn() ? '🔕 Sound off' : on ? '🔔 Sound on' : '🔔 Sound blocked';
+    }
+  };
+  const markPlayed = () => { window.__played = (window.__played || 0) + 1; };
+  const playKaching = duringGesture => {
+    const ac = actx; if (!ac || (ac.state !== 'running' && !duringGesture)) return false;
+    try { kachingInto(ac, ac.currentTime + 0.02); } catch (e) { return false; }
+    gestureAt = Date.now();
+    if (ac.state === 'running') { window.__lastAudible = gestureAt; markPlayed(); return true; }
+    return false;
+  };
+  const flushPending = () => {
+    if (!pending || !soundOn() || !audioReady() || !newCount()) { if (!newCount() || !soundOn()) pending = false; return; }
+    if (gestureAt && Date.now() - gestureAt < 800) { pending = false; return; }
+    pending = false; playKaching(false);
+  };
+  const keepAlive = () => {
+    if (!actx || keeper) return;
+    try {
+      const o = actx.createOscillator(), g = actx.createGain();
+      g.gain.value = 0.00001; o.frequency.value = 220; o.connect(g); g.connect(actx.destination); o.start();
+      keeper = o; o.onended = () => { if (keeper === o) keeper = null; };
+    } catch (e) { keeper = null; }
+  };
+  const poke = () => {
+    if (!actx) return;
+    try {
+      const n = Math.max(1, Math.floor(actx.sampleRate * 0.06)), b = actx.createBuffer(1, n, actx.sampleRate), d = b.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * 0.001 * (1 - i / n);
+      const s = actx.createBufferSource(); s.buffer = b; s.connect(actx.destination); s.start();
+    } catch (e) {}
+  };
+  const holdWake = force => {
+    if (!navigator.wakeLock || document.visibilityState !== 'visible' || wakeLock) return;
+    if (!force && Date.now() - wakeTryAt < 15000) return;
+    wakeTryAt = Date.now();
+    navigator.wakeLock.request('screen').then(lock => {
+      wakeLock = lock; lock.addEventListener('release', () => { if (wakeLock === lock) wakeLock = null; });
+    }).catch(() => {});
+  };
+  const ensureCtx = () => {
+    if (actx) return actx;
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null;
+    try { actx = new AC(); } catch (e) { return null; }
+    window.__actx = actx;
+    actx.addEventListener('statechange', () => {
+      if (actx.state === 'running') {
+        keepAlive();
+        // A chime started in the unlock tap is already on the graph; count it once when the engine actually runs.
+        if (gestureAt && Date.now() - gestureAt < 1500 && gestureAt > (window.__lastAudible || 0)) { window.__lastAudible = Date.now(); markPlayed(); pending = false; }
+        else flushPending();
+        updateSoundGate();
+      } else updateSoundGate();
+    });
+    return actx;
+  };
+  // Call from a user gesture. resume() and the keep-alive have to start in that same turn.
+  const unlockFromGesture = skipChime => {
+    try {
+      const ac = ensureCtx(); if (!ac) return;
+      if (ac.state !== 'running') { const p = ac.resume(); if (p && p.catch) p.catch(() => {}); poke(); }
+      keepAlive();
+      // Sound buttons play their own confirmation in the click that follows this pointerdown.
+      if (!skipChime && pending && soundOn() && newCount()) { playKaching(true); pending = false; }
+    } catch (e) {}
+    holdWake(true);
+  };
+  const justPlayed = () => gestureAt && Date.now() - gestureAt < 450;
+  const enableSound = () => {
+    LS.set('ctq_sound2', true); unlockFromGesture(true);
+    // If the engine is still blocked, this tap has to start the chime even if a silent attempt just happened.
+    if (!audioReady() || !justPlayed()) playKaching(true);
+    pending = false;
+    if (newCount()) lastPingAt = Date.now();
+    render();
+  };
+  const chime = () => {
+    window.__chimes = (window.__chimes || 0) + 1;
+    if (!soundOn()) return false;
+    lastPingAt = Date.now();
+    try {
+      if (!actx) { pending = true; updateSoundGate(); return false; }
+      if (actx.state !== 'running') {
+        pending = true;
+        const p = actx.resume(); if (p && p.then) p.then(() => { keepAlive(); flushPending(); updateSoundGate(); }).catch(() => {});
+        updateSoundGate(); return false;
+      }
+      keepAlive();
+      if (playKaching(false)) { pending = false; return true; }
+    } catch (e) {}
+    pending = true; updateSoundGate(); return false;
+  };
+  const tryAutoResume = () => {
+    if (!actx) return;
+    if (actx.state !== 'running') { const p = actx.resume(); if (p && p.then) p.then(() => { keepAlive(); flushPending(); updateSoundGate(); }).catch(() => {}); }
+    else keepAlive();
+  };
+  document.addEventListener('pointerdown', e => {
+    const el = e.target && e.target.closest ? e.target : (e.target && e.target.parentElement);
+    const actName = el && el.closest('[data-act]') && el.closest('[data-act]').dataset.act;
+    const loginTap = !!(el && el.closest('[data-testid=login-btn]'));
+    unlockFromGesture(actName === 'sound-enable' || actName === 'sound' || actName === 'sound-test' || loginTap);
+    if (loginTap && soundOn() && !justPlayed()) playKaching(true);
+  }, true);
+  document.addEventListener('keydown', unlockFromGesture, true);
 
   // ---------- login ----------
   const login = () => `<main class="login" data-testid="login"><div class="lbg" aria-hidden="true"></div><div class="lwrap"><img src="/img/logo.png" alt="Wilson's Pizza &amp; Grill" class="logo"><p class="eyebrow">Owner dashboard</p><h1>Welcome back</h1><p class="mut">Sign in to see orders as they come in.</p>
@@ -168,16 +287,19 @@
     const nNew = S.orders.filter(x => x.status === 'new').length;
     document.title = (nNew ? `(${nNew}) ` : '') + 'Orders · Owner';
     app.innerHTML = `<header class="top"><b>Owner dashboard</b><span class="fine">Wilson's Pizza &amp; Grill</span></header>
-      <main class="main" data-testid="tab-${S.tab}">${S.tab === 'orders' || S.tab === 'live' ? soundBar() : ''}${body}</main>
+      <main class="main" data-testid="tab-${S.tab}">${soundGate()}${soundBar()}${body}</main>
       <nav class="tabs" data-testid="tabbar">${TABS.map(([k, l, i]) => `<button class="${S.tab === k ? 'on' : ''}" data-act="tab" data-v="${k}" data-testid="tab-btn-${k}"><span>${i}</span>${l}${k === 'orders' && nNew ? `<em class="badge" data-testid="badge">${nNew}</em>` : ''}</button>`).join('')}</nav>
       ${o ? `<div class="scrim" data-act="close"></div>${detail(o)}` : ''}`;
     if (!o) window.scrollTo(0, y); syncPing(); };
 
   const loadOrders = async quiet => { try { const r = await api('/api/admin/orders'); const ids = new Set(S.orders.map(o => o.id));
       const fresh = r.orders.filter(o => o.status === 'new' && !ids.has(o.id));
-      const sig = JSON.stringify(r.orders), changed = sig !== S.sig; S.sig = sig; S.orders = r.orders; syncPing();
+      const sig = JSON.stringify(r.orders), changed = sig !== S.sig; S.sig = sig; S.orders = r.orders;
+      const arrived = !!(S.seen && fresh.length);
+      if (arrived) { window.__arrived = (window.__arrived || 0) + 1; window.__repingsAtArrival = window.__repings || 0; chime(); toast(fresh.length === 1 ? `New order #${fresh[0].id} from ${fresh[0].customer.name}` : `${fresh.length} new orders`); }
+      else if (dueRepeat()) repeatPing();
+      syncPing();
       if (quiet && !changed) return;
-      if (S.seen && fresh.length) { chime(); toast(fresh.length === 1 ? `New order #${fresh[0].id} from ${fresh[0].customer.name}` : `${fresh.length} new orders`); }
       S.seen = true; if (!quiet || !document.activeElement || !document.activeElement.matches('input,textarea,select')) render(); } catch (e) {} };
   const loadTab = async () => { try {
     if (S.tab === 'live') S.live = await api('/api/admin/live');
@@ -186,25 +308,52 @@
     if (S.tab === 'menu') { if (!S.menu) S.menu = await (await fetch('/menu.json')).json(); const r = await api('/api/admin/settings'); S.edits = r.menuEdits; }
     if (S.tab === 'settings') { const [r, st] = await Promise.all([api('/api/admin/settings'), api('/api/admin/stripe')]); S.settings = r.settings; S.webhook = r.webhook; S.lastAlert = r.lastAlert; S.stripe = st; }
     render(); } catch (e) { if (S.me) toast(e.message); } };
-  // Re-ping every 60s while any order is still 'new' (not accepted). Stops when none remain.
-  let ping = null; const PING_MS = window.__PING_MS || 60000;
-  const syncPing = () => { const n = S.me ? S.orders.filter(o => o.status === 'new').length : 0;
-    document.body.classList.toggle('urgent', n > 0);
-    if (n && !ping) ping = setInterval(() => { const k = S.orders.filter(o => o.status === 'new').length; if (!S.me || !k) { clearInterval(ping); ping = null; document.body.classList.remove('urgent'); return; }
-      window.__repings = (window.__repings || 0) + 1; chime(); toast(k === 1 ? '⏰ 1 order still waiting to be accepted' : `⏰ ${k} orders still waiting to be accepted`);
-      try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) {} }, PING_MS);
-    else if (!n && ping) { clearInterval(ping); ping = null; } };
+  // Re-ping every 5s while any order is still 'new' (not accepted). Stops when none remain.
+  // setTimeout is aimed at the next chime; a 1s heartbeat and the order poll repeat it if the
+  // browser delays that timer (screen on, this tab open). Wake Lock keeps the screen awake.
+  const repeatPing = () => {
+    if (!dueRepeat()) return false;
+    const k = newCount(); window.__repings = (window.__repings || 0) + 1;
+    if (soundOn()) chime(); else lastPingAt = Date.now();
+    toast(k === 1 ? '⏰ 1 order still waiting to be accepted' : `⏰ ${k} orders still waiting to be accepted`);
+    try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) {}
+    return true;
+  };
+  const armPing = () => {
+    clearTimeout(pingTimer); pingTimer = null;
+    const n = newCount(); document.body.classList.toggle('urgent', n > 0);
+    if (!S.me || !n) { if (!n) { pending = false; lastPingAt = 0; } return; }
+    if (!lastPingAt) lastPingAt = Date.now();
+    const wait = Math.max(250, pingMs() - (Date.now() - lastPingAt));
+    pingTimer = setTimeout(() => { pingTimer = null; if (!newCount()) { pending = false; lastPingAt = 0; document.body.classList.remove('urgent'); return; } repeatPing(); armPing(); }, wait);
+  };
+  const syncPing = () => armPing();
+  setInterval(() => {
+    if (!S.me || document.hidden) return;
+    if (actx && actx.state !== 'running') { const p = actx.resume(); if (p && p.then) p.then(() => { keepAlive(); flushPending(); updateSoundGate(); }).catch(() => {}); }
+    if (dueRepeat()) { repeatPing(); armPing(); }
+    else if (newCount()) holdWake(false);
+  }, 1000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    wakeTryAt = 0; tryAutoResume(); holdWake(true);
+    if (dueRepeat()) { repeatPing(); armPing(); } else syncPing();
+    if (S.me) loadOrders(true);
+  });
+  window.addEventListener('pageshow', () => { tryAutoResume(); syncPing(); });
+  window.addEventListener('focus', () => { tryAutoResume(); if (dueRepeat()) { repeatPing(); armPing(); } });
+  const pollMs = () => { const n = +window.__POLL_MS; return n > 0 ? n : 5000; };
   let poll = null, lpoll = null;
-  const start = async () => { render(); await loadOrders(); loadTab(); clearInterval(poll); poll = setInterval(() => { if (S.me) loadOrders(true); }, 5000); clearInterval(lpoll); lpoll = setInterval(async () => { if (S.me && S.tab === 'live' && !document.hidden) { try { S.live = await api('/api/admin/live'); if (S.tab === 'live') render(); } catch (e) {} } }, 10000); };
+  const start = async () => { tryAutoResume(); render(); await loadOrders(); loadTab(); clearInterval(poll); poll = setInterval(() => { if (S.me) loadOrders(true); }, pollMs()); clearInterval(lpoll); lpoll = setInterval(async () => { if (S.me && S.tab === 'live' && !document.hidden) { try { S.live = await api('/api/admin/live'); if (S.tab === 'live') render(); } catch (e) {} } }, 10000); };
 
   const fromHash = () => { const h = location.hash.slice(1); const [t, q] = h.split('?'); if (t === 'pay') S.tab = 'settings'; else if (TABS.some(x => x[0] === t)) S.tab = t;
     if (q && /stripe=connected/.test(q)) setTimeout(() => toast('Stripe connected'), 300); else if (q && /stripe=/.test(q)) setTimeout(() => toast('Stripe did not connect. Try again.'), 300); };
 
   const act = async (a, el) => { try {
     if (a === 'tab') { S.tab = el.dataset.v; S.open = null; history.replaceState(null, '', '#' + S.tab); window.scrollTo(0, 0); render(); loadTab(); }
-    else if (a === 'sound') { LS.set('ctq_sound2', !soundOn()); if (soundOn()) { unlock(); kaching(); } render(); }
+    else if (a === 'sound' || a === 'sound-enable' || a === 'sound-test') enableSound();
+    else if (a === 'sound-mute') { LS.set('ctq_sound2', false); pending = false; render(); }
     else if (a === 'pwshow') { const pw = $('[data-testid=login-pass]'); const sh = pw.type === 'password'; pw.type = sh ? 'text' : 'password'; el.textContent = sh ? 'Hide' : 'Show'; el.setAttribute('aria-label', sh ? 'Hide password' : 'Show password'); }
-    else if (a === 'sound-enable') { unlock(); kaching(); render(); }
     else if (a === 'filter') { S.filter = el.dataset.v; render(); }
     else if (a === 'open') { S.open = el.dataset.id; S.sheet = null; render(); }
     else if (a === 'close') { S.open = null; render(); }
@@ -213,7 +362,7 @@
     else if (a === 'preset') { const p = PRESETS.find(x => x[0] === el.dataset.v); S.from = addDays(today(), p[2]); S.to = addDays(today(), p[3]); S.rep = null; S.an = null; render(); loadTab(); }
     else if (a === 'resetmenu') { if (!confirm('Put every price and item back the way it was?')) return; await api('/api/admin/menu', { method: 'DELETE' }); toast('Menu reset'); loadTab(); }
     else if (a === 'disconnect') { if (!confirm('Disconnect Stripe? Card orders stop until you connect again.')) return; await api('/api/admin/stripe/disconnect', { method: 'POST' }); toast('Stripe disconnected'); loadTab(); }
-    else if (a === 'logout') { await api('/api/owner/logout', { method: 'POST' }); S.me = null; S.orders = []; S.seen = null; clearInterval(poll); render(); }
+    else if (a === 'logout') { await api('/api/owner/logout', { method: 'POST' }); S.me = null; S.orders = []; S.seen = null; pending = false; lastPingAt = 0; clearInterval(poll); clearTimeout(pingTimer); pingTimer = null; render(); }
   } catch (e) { toast(e.message); if (el) el.disabled = false; } };
   const upd = o => { const i = S.orders.findIndex(x => x.id === o.id); if (i >= 0) S.orders[i] = o; S.sheet = null; render(); };
 
@@ -223,7 +372,7 @@
     catch (er) { toast(er.message); loadTab(); } });
   document.addEventListener('submit', async e => { e.preventDefault(); const f = e.target, d = Object.fromEntries(new FormData(f)), btn = f.querySelector('button:not([type=button])');
     try { if (btn) btn.disabled = true;
-      if (f.id === 'loginf') { unlock(); S.email = d.email; await api('/api/owner/login', { method: 'POST', body: { email: d.email, password: d.password, keep: !!d.keep } }); LS.set('ctq_keep', !!d.keep); S.err = ''; S.me = await api('/api/admin/me'); start(); return; }
+      if (f.id === 'loginf') { unlockFromGesture(); if (soundOn() && !justPlayed()) playKaching(true); S.email = d.email; await api('/api/owner/login', { method: 'POST', body: { email: d.email, password: d.password, keep: !!d.keep } }); LS.set('ctq_keep', !!d.keep); S.err = ''; S.me = await api('/api/admin/me'); start(); return; }
       if (f.id === 'cancelf') { const r = await api(`/api/admin/orders/${encodeURIComponent(S.open)}/cancel`, { method: 'POST', body: { reason: d.reason } }); upd(r.order); toast('Order canceled'); }
       if (f.id === 'refundf') { const full = d.kind === 'full'; if (!full && !(+d.amount > 0)) throw new Error('Enter an amount.'); const r = await api(`/api/admin/orders/${encodeURIComponent(S.open)}/refund`, { method: 'POST', body: { full, amount: +d.amount, reason: d.reason } }); upd(r.order); toast('Refunded ' + m(r.order.refunds[r.order.refunds.length - 1].amount)); }
       if (f.id === 'rangef') { let a = d.from || today(), b = d.to || a; if (a > b) [a, b] = [b, a]; S.from = a; S.to = b; S.rep = null; S.an = null; render(); await loadTab(); }
