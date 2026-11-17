@@ -78,8 +78,19 @@ const LIMIT = { max: 5, windowMs: 15 * 60 * 1000 };
 const store = makeStore(env);
 const menu = JSON.parse(fs.readFileSync(path.join(__dirname, 'public', 'menu.json'), 'utf8'));
 const DAYS = 7;
-const DEF_SETTINGS = { taxRate: PAY.KC_SALES_TAX, pickupMins: 15, acceptOrders: true, pos: 'none', doordashUrl: 'https://www.doordash.com/store/wilson-s-pizza-and-grill-kansas-city-216952/', hours: Array.from({ length: DAYS }, (_, i) => ({ open: '10:00', close: '20:30', closed: i === 0 || i === 2 })) };
+const DEF_SETTINGS = { taxRate: PAY.KC_SALES_TAX, pickupMins: 15, acceptOrders: true, pos: 'none', doordashUrl: 'https://www.doordash.com/store/wilson-s-pizza-and-grill-kansas-city-216952/', hours: Array.from({ length: DAYS }, (_, i) => ({ open: '10:00', close: '20:30', closed: i === 0 })) };
 const getSettings = async () => { const s = Object.assign({}, DEF_SETTINGS, await store.getKV('settings', {})); s.taxRate = PAY.taxRate(s); return s; };
+// Saved settings override defaults (data/db.json, or Postgres if DATABASE_URL is set).
+// If the store still has the old default (closed Sunday and Tuesday, 10:00-20:30), open Tuesday.
+const isLegacyClosedTueHours = hours => Array.isArray(hours) && hours.length === 7 && hours.every((h, i) => h && h.open === '10:00' && h.close === '20:30' && !!h.closed === (i === 0 || i === 2));
+const migrateLegacyHours = async () => {
+  const saved = await store.getKV('settings', {});
+  if (!isLegacyClosedTueHours(saved.hours)) return false;
+  saved.hours = saved.hours.map((h, i) => ({ open: h.open, close: h.close, closed: i === 0 }));
+  await store.setKV('settings', saved);
+  console.log('Hours updated: open Mon-Sat 10:00-20:30, closed Sunday');
+  return true;
+};
 const getEdits = async () => store.getKV('menuEdits', {});
 // KV status 'connected' wins (owner OAuth). An explicit disconnect must not
 // snap back to STRIPE_ACCOUNT_ID. That env account is only the fallback so
@@ -481,8 +492,11 @@ app.use('/api', (req, res) => res.status(404).json({ ok: false, error: 'Not foun
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 const ready = store.init();
-if (require.main === module) ready.then(() => app.listen(PORT, () => {
-  console.log(`${NAME} on :${PORT} (store ${store.kind}, smtp ${smtpReady ? 'on' : 'off'}, stripe ${STRIPE_LIVE ? 'live' : 'demo'}, owner login ${OWNER_HASH ? 'on' : 'OFF'})`);
-  getStripe().then(st => { if (STRIPE_LIVE && st.status === 'connected' && !st.demo) return ensurePaymentMethodDomain(st.id); }).then(w => { if (w && w.domain) console.log('Apple Pay domain', w.domain.domain, w.domain.enabled ? 'enabled' : 'disabled', 'applePay=' + (w.domain.applePay || 'unknown')); }).catch(e => console.error('Apple Pay domain setup:', e.message));
-})).catch(e => { console.error('Store init failed:', e); process.exit(1); });
-module.exports = { app, ready, store, buildEmail, webhookFields, priceCart, totalsFor, chargeCents, stripeLineParams, summarize, localParts, resolveStripe, ensurePaymentMethodDomain, PAY_DOMAIN };
+if (require.main === module) ready.then(async () => {
+  await migrateLegacyHours().catch(e => console.error('hours migrate:', e.message));
+  app.listen(PORT, () => {
+    console.log(`${NAME} on :${PORT} (store ${store.kind}, smtp ${smtpReady ? 'on' : 'off'}, stripe ${STRIPE_LIVE ? 'live' : 'demo'}, owner login ${OWNER_HASH ? 'on' : 'OFF'})`);
+    getStripe().then(st => { if (STRIPE_LIVE && st.status === 'connected' && !st.demo) return ensurePaymentMethodDomain(st.id); }).then(w => { if (w && w.domain) console.log('Apple Pay domain', w.domain.domain, w.domain.enabled ? 'enabled' : 'disabled', 'applePay=' + (w.domain.applePay || 'unknown')); }).catch(e => console.error('Apple Pay domain setup:', e.message));
+  });
+}).catch(e => { console.error('Store init failed:', e); process.exit(1); });
+module.exports = { app, ready, store, buildEmail, webhookFields, priceCart, totalsFor, chargeCents, stripeLineParams, summarize, localParts, resolveStripe, ensurePaymentMethodDomain, PAY_DOMAIN, migrateLegacyHours, isLegacyClosedTueHours };

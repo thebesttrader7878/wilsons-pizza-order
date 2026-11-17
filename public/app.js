@@ -13,7 +13,7 @@
     taxRate: 9.125, // Kansas City, KS 66104 prepared food. PAY.taxRate keeps every order at least this.
     pickupMins: 15,
     acceptOrders: true,
-    hours: DAYS.map((_, i) => ({ open: '10:00', close: '20:30', closed: i === 0 || i === 2 })) // carryout hours from wilsonspizzaandgrill.com (closed Sun and Tue)
+    hours: DAYS.map((_, i) => ({ open: '10:00', close: '20:30', closed: i === 0 })) // open Mon-Sat 10:00-20:30 America/Chicago, closed Sunday
   };
   const S = { menu: null, cfg: { settings: {}, menuEdits: {}, stripe: { mode: 'demo' } }, cart: LS.get('ctq_cart', []), mode: 'pickup', q: '', tip: 0, conf: {} };
   const settings = () => Object.assign({}, DEF_SETTINGS, S.cfg.settings, { name: DEF_SETTINGS.name });
@@ -334,7 +334,7 @@
         ${sumHtml(t)}
         <button class="btn block" data-testid="placeorder" ${belowMin || !s.acceptOrders || cardOff() ? 'disabled' : ''}>${!s.acceptOrders ? 'Not taking online orders right now' : cardOff() ? 'Card payments not available yet' : 'Pay & place pickup order · ' + m(t.total)}</button></div>
       </form></div>`; };
-  const laterSlots = s => { const h = s.hours[new Date().getDay()]; if (h.closed) return []; const out = []; const d = new Date(); d.setMinutes(Math.ceil((d.getMinutes() + 30) / 15) * 15, 0, 0); for (let i = 0; i < 24; i++) { const t = d.toTimeString().slice(0, 5); if (t >= h.open && t < h.close) out.push('Today ' + fmtT(t)); d.setMinutes(d.getMinutes() + 15); } return out; };
+  const laterSlots = s => { const k = kc(), h = s.hours[k.day]; if (!h || h.closed) return []; const toMin = t => { const p = t.split(':').map(Number); return p[0] * 60 + p[1]; }; const toT = m => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); let m = Math.ceil((toMin(k.t) + 30) / 15) * 15; const end = toMin(h.close), start = toMin(h.open), out = []; for (let i = 0; i < 24 && m < end; i++, m += 15) { if (m >= start) out.push('Today ' + fmtT(toT(m))); } return out; };
 
   // Live Stripe (owner connected her account and keys are set): Payment Element in deferred-intent mode.
   const liveCard = () => S.cfg.stripe.mode === 'live' && S.cfg.stripe.connected && S.cfg.stripe.publishableKey;
