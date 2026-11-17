@@ -254,12 +254,19 @@
   // ---------- settings + get paid ----------
   const pay = () => { const st = S.stripe; if (!st) return '';
     const on = st.status === 'connected', demo = st.mode !== 'live';
+    const connectLabel = on ? 'Connect a different Stripe account' : 'Connect with Stripe';
+    const connectBtn = `<a class="btn stripe" href="/api/admin/stripe/connect" data-testid="stripe-connect">${connectLabel}</a>`;
+    const explain = on
+      ? (st.fromEnv
+          ? 'A Stripe account is already connected. Connect your own account to have card orders pay out to you. That replaces the current account.'
+          : 'Card orders go straight to your Stripe account and Stripe sends the money to your bank.')
+      : 'Connect Stripe so card orders land in your bank account. Takes about 5 minutes.';
     return `<section class="card pay" id="pay" data-testid="getpaid"><h2>Get paid</h2>
       ${demo ? '<span class="demo" data-testid="demo-badge">Demo mode, no real payments</span>' : ''}
       <div class="pstat ${on ? 'on' : ''}" data-testid="stripe-status">${on ? '✅ Connected, payouts on' : '⚪ Not connected'}</div>
-      <p class="mut" data-testid="stripe-explain">${on ? 'Card orders go straight to your Stripe account and Stripe sends the money to your bank.' : 'Connect Stripe so card orders land in your bank account. Takes about 5 minutes.'}</p>
-      ${on ? `<p class="fine">Account ${esc(st.account)}${st.connectedAt ? ' · since ' + fmtDay(st.connectedAt) : ''}</p><button class="btn ghost" data-act="disconnect" data-testid="stripe-disconnect">Disconnect</button>`
-           : `<a class="btn stripe" href="/api/admin/stripe/connect" data-testid="stripe-connect">Connect with Stripe</a>`}
+      <p class="mut" data-testid="stripe-explain">${explain}</p>
+      ${on ? `<p class="fine">Account ${esc(st.account)}${st.connectedAt ? ' · since ' + fmtDay(st.connectedAt) : ''}</p>${connectBtn}<button class="btn ghost" data-act="disconnect" data-testid="stripe-disconnect">Disconnect</button>`
+           : connectBtn}
       ${demo ? '<p class="fine">This is a practice run. Real payouts turn on once your Stripe account is linked.</p>' : ''}</section>`; };
   const liveTab = () => { const L = S.live; if (!L) return '<div class="empty">Loading...</div>';
     const row = (k, l, i) => `<div class="lrow" data-testid="live-${k}"><span>${i} ${l}</span><b>${L.pages[k]}</b></div>`;

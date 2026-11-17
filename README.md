@@ -8,6 +8,6 @@ Run locally: `npm install && npm start`, then open http://localhost:3000
 - OWNER_EMAIL, OWNER_PASSWORD: owner dashboard login
 - SITE_URL: public URL of the site
 - ORDER_WEBHOOK_URL: Formspree form URL for order emails (empty for now; orders still save to the dashboard)
-- STRIPE_SECRET_KEY, STRIPE_CLIENT_ID, STRIPE_ACCOUNT_ID, PLATFORM_FEE_CENTS: optional; without them customers pay at pickup
+- STRIPE_SECRET_KEY, STRIPE_CLIENT_ID, STRIPE_PUBLISHABLE_KEY, STRIPE_ACCOUNT_ID, PLATFORM_FEE_CENTS: optional Connect keys (test or live). PLATFORM_FEE_CENTS defaults to 150 ($1.50). STRIPE_ACCOUNT_ID is a fallback payout account so test orders keep working until the owner connects their own shop in /owner. Connecting or disconnecting in the dashboard replaces that fallback.
 
 Menu: public/menu.json, pulled from DoorDash store 216952 (pickup prices, options and photos).
