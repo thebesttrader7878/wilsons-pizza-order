@@ -52,7 +52,16 @@ const DAYS = 7;
 const DEF_SETTINGS = { taxRate: PAY.KC_SALES_TAX, pickupMins: 15, acceptOrders: true, pos: 'none', doordashUrl: 'https://www.doordash.com/store/wilson-s-pizza-and-grill-kansas-city-216952/', hours: Array.from({ length: DAYS }, (_, i) => ({ open: '10:00', close: '20:30', closed: i === 0 || i === 2 })) };
 const getSettings = async () => { const s = Object.assign({}, DEF_SETTINGS, await store.getKV('settings', {})); s.taxRate = PAY.taxRate(s); return s; };
 const getEdits = async () => store.getKV('menuEdits', {});
-const getStripe = async () => { const st = await store.getKV('stripe', { status: 'none' }); if (st.status !== 'connected' && STRIPE_LIVE && /^acct_[A-Za-z0-9]+$/.test(env.STRIPE_ACCOUNT_ID || '')) return { status: 'connected', id: env.STRIPE_ACCOUNT_ID, demo: false, fromEnv: true }; return st; };
+// KV status 'connected' wins (owner OAuth). An explicit disconnect must not
+// snap back to STRIPE_ACCOUNT_ID. That env account is only the fallback so
+// test orders keep working until the owner connects their own shop.
+const resolveStripe = (st, { live, accountId }) => {
+  if (st && st.status === 'connected') return st;
+  if (st && st.disconnected) return { status: 'none', disconnected: true };
+  if (live && /^acct_[A-Za-z0-9]+$/.test(accountId || '')) return { status: 'connected', id: accountId, demo: false, fromEnv: true };
+  return st || { status: 'none' };
+};
+const getStripe = async () => resolveStripe(await store.getKV('stripe', { status: 'none' }), { live: STRIPE_LIVE, accountId: env.STRIPE_ACCOUNT_ID });
 
 const app = express();
 app.set('trust proxy', 1);
@@ -387,7 +396,7 @@ app.put('/api/admin/menu/:id', async (req, res) => {
 app.delete('/api/admin/menu', async (req, res) => { await store.setKV('menuEdits', {}); res.json({ ok: true }); });
 
 // ---------- Stripe Connect routes ----------
-app.get('/api/admin/stripe', async (req, res) => { const st = await getStripe(); res.json({ ok: true, mode: STRIPE_LIVE ? 'live' : 'demo', status: st.status, account: st.id || '', connectedAt: st.at || '' }); });
+app.get('/api/admin/stripe', async (req, res) => { const st = await getStripe(); res.json({ ok: true, mode: STRIPE_LIVE ? 'live' : 'demo', status: st.status, account: st.id || '', connectedAt: st.at || '', fromEnv: !!st.fromEnv }); });
 app.get('/api/admin/stripe/connect', async (req, res) => {
   if (!STRIPE_LIVE) { await store.setKV('stripe', { status: 'connected', id: 'acct_demo_' + crypto.randomBytes(5).toString('hex'), demo: true, at: new Date().toISOString() }); return res.redirect('/owner#pay?stripe=connected'); }
   const state = crypto.randomBytes(16).toString('hex'); req.owner.oauthState = state;
@@ -407,8 +416,9 @@ app.get('/api/admin/stripe/callback', async (req, res) => {
 });
 app.post('/api/admin/stripe/disconnect', async (req, res) => {
   const st = await getStripe();
-  if (STRIPE_LIVE && st.status === 'connected' && !st.demo) { try { await fetch('https://connect.stripe.com/oauth/deauthorize', { method: 'POST', headers: { Authorization: 'Bearer ' + env.STRIPE_SECRET_KEY, 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ client_id: env.STRIPE_CLIENT_ID, stripe_user_id: st.id }) }); } catch (e) { /* still forget it locally */ } }
-  await store.setKV('stripe', { status: 'none' }); res.json({ ok: true });
+  // Do not deauthorize the platform default test account; just stop using it here.
+  if (STRIPE_LIVE && st.status === 'connected' && !st.demo && !st.fromEnv) { try { await fetch('https://connect.stripe.com/oauth/deauthorize', { method: 'POST', headers: { Authorization: 'Bearer ' + env.STRIPE_SECRET_KEY, 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ client_id: env.STRIPE_CLIENT_ID, stripe_user_id: st.id }) }); } catch (e) { /* still forget it locally */ } }
+  await store.setKV('stripe', { status: 'none', disconnected: true, at: new Date().toISOString() }); res.json({ ok: true });
 });
 
 // ---------- pages ----------
@@ -424,4 +434,4 @@ app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.ht
 
 const ready = store.init();
 if (require.main === module) ready.then(() => app.listen(PORT, () => console.log(`${NAME} on :${PORT} (store ${store.kind}, smtp ${smtpReady ? 'on' : 'off'}, stripe ${STRIPE_LIVE ? 'live' : 'demo'}, owner login ${OWNER_HASH ? 'on' : 'OFF'})`))).catch(e => { console.error('Store init failed:', e); process.exit(1); });
-module.exports = { app, ready, store, buildEmail, webhookFields, priceCart, totalsFor, chargeCents, stripeLineParams, summarize, localParts };
+module.exports = { app, ready, store, buildEmail, webhookFields, priceCart, totalsFor, chargeCents, stripeLineParams, summarize, localParts, resolveStripe };
