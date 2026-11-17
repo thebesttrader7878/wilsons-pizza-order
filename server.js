@@ -31,6 +31,35 @@ const stripeApi = async (method, p, params, account) => {
   const r = await fetch('https://api.stripe.com' + p, { method, headers: Object.assign({ Authorization: 'Bearer ' + env.STRIPE_SECRET_KEY, 'Content-Type': 'application/x-www-form-urlencoded' }, account ? { 'Stripe-Account': account } : {}), body: params ? new URLSearchParams(params).toString() : undefined, signal: AbortSignal.timeout(15000) });
   const j = await r.json(); if (!r.ok) throw new Error((j.error && j.error.message) || 'Stripe error ' + r.status); return j;
 };
+const PAY_DOMAIN = (() => { try { return new URL(SITE_URL).hostname; } catch (e) { return 'wilsons-pizza-grill.onrender.com'; } })();
+const viewDomain = d => !d ? null : ({ id: d.id, domain: d.domain_name, enabled: !!d.enabled, livemode: !!d.livemode, applePay: (d.apple_pay && d.apple_pay.status) || '', googlePay: (d.google_pay && d.google_pay.status) || '' });
+const prefOf = (cfg, name) => { const p = cfg && cfg[name] && cfg[name].display_preference; return p ? (p.value || p.preference || '') : ''; };
+const viewPmc = c => ({ id: c.id, name: c.name || '', active: c.active !== false, isDefault: !!c.is_default, card: prefOf(c, 'card'), applePay: prefOf(c, 'apple_pay'), googlePay: prefOf(c, 'google_pay') });
+
+// Register/enable this site as a payment method domain on a connected account (needed for Apple Pay on Connect direct charges).
+async function ensurePaymentMethodDomain(account) {
+  if (!STRIPE_LIVE || !account || !/^acct_[A-Za-z0-9]+$/.test(account)) return { ok: false, skipped: true };
+  try {
+    const list = await stripeApi('GET', '/v1/payment_method_domains?limit=100', null, account);
+    let d = (list.data || []).find(x => x.domain_name === PAY_DOMAIN);
+    if (!d) d = await stripeApi('POST', '/v1/payment_method_domains', { domain_name: PAY_DOMAIN, enabled: 'true' }, account);
+    else if (!d.enabled) d = await stripeApi('POST', '/v1/payment_method_domains/' + encodeURIComponent(d.id), { enabled: 'true' }, account);
+    if (d.apple_pay && d.apple_pay.status && d.apple_pay.status !== 'active') {
+      try { d = await stripeApi('POST', '/v1/payment_method_domains/' + encodeURIComponent(d.id) + '/validate', {}, account); } catch (e) { /* association file may not have been reachable yet */ }
+    }
+    let configs = [];
+    try {
+      const pmc = await stripeApi('GET', '/v1/payment_method_configurations?limit=100', null, account);
+      for (const c of (pmc.data || [])) {
+        if (prefOf(c, 'apple_pay') === 'off') {
+          try { const u = await stripeApi('POST', '/v1/payment_method_configurations/' + encodeURIComponent(c.id), { 'apple_pay[display_preference][preference]': 'on' }, account); configs.push(viewPmc(u)); continue; } catch (e) { /* report original */ }
+        }
+        configs.push(viewPmc(c));
+      }
+    } catch (e) { configs = [{ error: e.message }]; }
+    return { ok: true, domain: viewDomain(d), configs };
+  } catch (e) { console.error('payment method domain:', e.message); return { ok: false, error: e.message }; }
+}
 
 // ---------- owner auth ----------
 const OWNER_EMAIL = (env.OWNER_EMAIL || '').trim().toLowerCase();
@@ -396,7 +425,20 @@ app.put('/api/admin/menu/:id', async (req, res) => {
 app.delete('/api/admin/menu', async (req, res) => { await store.setKV('menuEdits', {}); res.json({ ok: true }); });
 
 // ---------- Stripe Connect routes ----------
-app.get('/api/admin/stripe', async (req, res) => { const st = await getStripe(); res.json({ ok: true, mode: STRIPE_LIVE ? 'live' : 'demo', status: st.status, account: st.id || '', connectedAt: st.at || '', fromEnv: !!st.fromEnv }); });
+app.get('/api/admin/stripe', async (req, res) => {
+  const st = await getStripe();
+  let wallets = null;
+  if (STRIPE_LIVE && st.status === 'connected' && !st.demo) wallets = await ensurePaymentMethodDomain(st.id);
+  res.json({ ok: true, mode: STRIPE_LIVE ? 'live' : 'demo', status: st.status, account: st.id || '', connectedAt: st.at || '', fromEnv: !!st.fromEnv, payDomain: PAY_DOMAIN, wallets });
+});
+app.get('/api/admin/stripe/session/:id', async (req, res) => {
+  try {
+    const st = await getStripe(); if (!STRIPE_LIVE || st.status !== 'connected') return res.status(400).json({ ok: false, error: 'Stripe is not connected.' });
+    const id = String(req.params.id || ''); if (!/^cs_(test|live)_[A-Za-z0-9]+$/.test(id)) return res.status(400).json({ ok: false, error: 'Bad session id.' });
+    const cs = await stripeApi('GET', '/v1/checkout/sessions/' + encodeURIComponent(id) + '?expand[]=payment_intent', null, st.id);
+    res.json({ ok: true, livemode: !!cs.livemode, status: cs.status, mode: cs.mode, uiMode: cs.ui_mode || 'hosted', currency: cs.currency, amount: cs.amount_total, paymentMethodTypes: cs.payment_method_types || [], paymentMethodConfiguration: cs.payment_method_configuration_details || null, account: st.id });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
 app.get('/api/admin/stripe/connect', async (req, res) => {
   if (!STRIPE_LIVE) { await store.setKV('stripe', { status: 'connected', id: 'acct_demo_' + crypto.randomBytes(5).toString('hex'), demo: true, at: new Date().toISOString() }); return res.redirect('/owner#pay?stripe=connected'); }
   const state = crypto.randomBytes(16).toString('hex'); req.owner.oauthState = state;
@@ -411,7 +453,9 @@ app.get('/api/admin/stripe/callback', async (req, res) => {
   req.owner.oauthState = null;
   try { const r = await fetch('https://connect.stripe.com/oauth/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ client_secret: env.STRIPE_SECRET_KEY, code: String(req.query.code || ''), grant_type: 'authorization_code' }) });
     const j = await r.json(); if (!r.ok || !j.stripe_user_id) throw new Error(j.error_description || 'Stripe connect failed');
-    await store.setKV('stripe', { status: 'connected', id: j.stripe_user_id, demo: false, at: new Date().toISOString() }); res.redirect('/owner#pay?stripe=connected');
+    await store.setKV('stripe', { status: 'connected', id: j.stripe_user_id, demo: false, at: new Date().toISOString() });
+    ensurePaymentMethodDomain(j.stripe_user_id).catch(e => console.error('connect domain register:', e.message));
+    res.redirect('/owner#pay?stripe=connected');
   } catch (e) { res.redirect('/owner#pay?stripe=failed'); }
 });
 app.post('/api/admin/stripe/disconnect', async (req, res) => {
@@ -422,6 +466,10 @@ app.post('/api/admin/stripe/disconnect', async (req, res) => {
 });
 
 // ---------- pages ----------
+// Explicit route: express.static ignores dotfiles by default, and the * HTML fallback
+// would otherwise serve the homepage for Apple's domain association check.
+const APPLE_ASSOC = path.join(__dirname, 'public', '.well-known', 'apple-developer-merchantid-domain-association');
+app.get('/.well-known/apple-developer-merchantid-domain-association', (req, res) => { res.set('Content-Type', 'application/octet-stream'); res.set('Cache-Control', 'public, max-age=300'); res.sendFile(APPLE_ASSOC); });
 app.get('/robots.txt', (req, res) => res.type('text/plain').send('User-agent: *\nDisallow: /owner\nDisallow: /api/\n'));
 const ownerDir = path.join(__dirname, 'owner');
 app.use('/owner', (req, res, next) => { res.set('X-Robots-Tag', 'noindex, nofollow'); res.set('Cache-Control', 'no-store'); next(); });
@@ -433,5 +481,8 @@ app.use('/api', (req, res) => res.status(404).json({ ok: false, error: 'Not foun
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 const ready = store.init();
-if (require.main === module) ready.then(() => app.listen(PORT, () => console.log(`${NAME} on :${PORT} (store ${store.kind}, smtp ${smtpReady ? 'on' : 'off'}, stripe ${STRIPE_LIVE ? 'live' : 'demo'}, owner login ${OWNER_HASH ? 'on' : 'OFF'})`))).catch(e => { console.error('Store init failed:', e); process.exit(1); });
-module.exports = { app, ready, store, buildEmail, webhookFields, priceCart, totalsFor, chargeCents, stripeLineParams, summarize, localParts, resolveStripe };
+if (require.main === module) ready.then(() => app.listen(PORT, () => {
+  console.log(`${NAME} on :${PORT} (store ${store.kind}, smtp ${smtpReady ? 'on' : 'off'}, stripe ${STRIPE_LIVE ? 'live' : 'demo'}, owner login ${OWNER_HASH ? 'on' : 'OFF'})`);
+  getStripe().then(st => { if (STRIPE_LIVE && st.status === 'connected' && !st.demo) return ensurePaymentMethodDomain(st.id); }).then(w => { if (w && w.domain) console.log('Apple Pay domain', w.domain.domain, w.domain.enabled ? 'enabled' : 'disabled', 'applePay=' + (w.domain.applePay || 'unknown')); }).catch(e => console.error('Apple Pay domain setup:', e.message));
+})).catch(e => { console.error('Store init failed:', e); process.exit(1); });
+module.exports = { app, ready, store, buildEmail, webhookFields, priceCart, totalsFor, chargeCents, stripeLineParams, summarize, localParts, resolveStripe, ensurePaymentMethodDomain, PAY_DOMAIN };
