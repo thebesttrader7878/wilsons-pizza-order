@@ -8,6 +8,7 @@ const nodemailer = require('nodemailer');
 const makeStore = require('./lib/store');
 const POS = require('./lib/pos');
 const PAY = require('./public/pay.js');
+const CE = require('./lib/customer-email');
 
 const env = process.env;
 const PORT = env.PORT || 3000;
@@ -22,7 +23,7 @@ const DEFAULT_WEBHOOK = ''; // add the Formspree URL later via ORDER_WEBHOOK_URL
 const WEBHOOK_URL = /^https:\/\//.test((env.ORDER_WEBHOOK_URL || '').trim()) ? env.ORDER_WEBHOOK_URL.trim() : DEFAULT_WEBHOOK;
 const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = env;
 const smtpReady = !!(SMTP_HOST && SMTP_USER && SMTP_PASS);
-const transport = smtpReady ? nodemailer.createTransport({ host: SMTP_HOST, port: +(SMTP_PORT || 587), secure: +(SMTP_PORT || 587) === 465, auth: { user: SMTP_USER, pass: SMTP_PASS } }) : null;
+const transport = smtpReady ? nodemailer.createTransport({ host: SMTP_HOST, port: +(SMTP_PORT || 587), secure: +(SMTP_PORT || 587) === 465, auth: { user: SMTP_USER, pass: SMTP_PASS }, connectionTimeout: 8000, greetingTimeout: 8000, socketTimeout: 10000 }) : null;
 
 // ---------- Stripe Connect (Standard, OAuth) ----------
 const STRIPE_LIVE = !!(env.STRIPE_CLIENT_ID && env.STRIPE_SECRET_KEY);
@@ -201,7 +202,9 @@ async function notify(o) {
     if (ok || !transport) return Object.assign({ ok: true, emailed: ok, via: 'formspree', status: w.status, formspree: w.body }, ok || !w.status ? {} : { browserSend: { url: WEBHOOK_URL, fields: webhookFields(o) } });
   } catch (err) { console.error('Webhook failed:', err.message); }
   if (!transport) { const mail = buildEmail(o); console.log('[order email, logged only]\n' + mail.subject + '\n' + mail.text); return { ok: true, emailed: false, logged: true }; }
-  try { await transport.sendMail(buildEmail(o)); return { ok: true, emailed: true, via: 'smtp' }; } catch (err) { console.error('SMTP fallback failed:', err.message); return { ok: true, emailed: false }; }
+  // Never block the order on SMTP (Render blocks outbound SMTP, so this would hang until timeout).
+  setImmediate(() => transport.sendMail(buildEmail(o)).then(() => console.log('[smtp fallback] order', o.id, 'sent'), err => console.error('SMTP fallback failed:', err.message)));
+  return { ok: true, emailed: false, via: 'smtp-queued' };
 }
 
 // ---------- public API ----------
@@ -294,8 +297,9 @@ app.post('/api/orders', async (req, res) => {
       items, ...t, payment, refunds: [], refunded: 0, sid: /^[a-z0-9]{8,40}$/i.test(String(b.sid || '')) ? b.sid : '', log: [{ at: created, status: 'new' }] };
     o.pos = POS.push(s.pos, o);
     await store.saveOrder(o);
+    const ce = customerEmail.queue(o); // fire-and-forget, never awaited
     const n = await notify(o);
-    res.json(Object.assign({ ok: true, id: o.id, token: o.token, order: publicOrder(o) }, { email: n }));
+    res.json(Object.assign({ ok: true, id: o.id, token: o.token, order: publicOrder(o) }, { email: n, customerEmail: !!ce.queued }));
   } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
 });
 
@@ -487,16 +491,17 @@ app.use('/owner', (req, res, next) => { res.set('X-Robots-Tag', 'noindex, nofoll
 app.get(['/owner', '/owner/'], (req, res) => res.sendFile(path.join(ownerDir, 'index.html')));
 app.use('/owner', express.static(ownerDir));
 app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
-app.get('/healthz', (req, res) => res.json({ ok: true, notify: 'formspree', webhook: WEBHOOK_URL, smtpFallback: smtpReady, store: store.kind, ownerLogin: !!(OWNER_EMAIL && OWNER_HASH), stripe: STRIPE_LIVE ? 'live' : 'demo' }));
+app.get('/healthz', (req, res) => res.json({ ok: true, notify: 'formspree', webhook: WEBHOOK_URL, smtpFallback: smtpReady, customerEmail: CE.providerFlag(env), store: store.kind, ownerLogin: !!(OWNER_EMAIL && OWNER_HASH), stripe: STRIPE_LIVE ? 'live' : 'demo' }));
 app.use('/api', (req, res) => res.status(404).json({ ok: false, error: 'Not found' }));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
+const customerEmail = CE.makeCustomerEmailer({ env, store, cfg: async () => { const s = await getSettings(); return { site: SITE_URL, pickupMins: s.pickupMins }; } });
 const ready = store.init();
 if (require.main === module) ready.then(async () => {
   await migrateLegacyHours().catch(e => console.error('hours migrate:', e.message));
   app.listen(PORT, () => {
-    console.log(`${NAME} on :${PORT} (store ${store.kind}, smtp ${smtpReady ? 'on' : 'off'}, stripe ${STRIPE_LIVE ? 'live' : 'demo'}, owner login ${OWNER_HASH ? 'on' : 'OFF'})`);
+    console.log(`${NAME} on :${PORT} (store ${store.kind}, smtp ${smtpReady ? 'on' : 'off'}, stripe ${STRIPE_LIVE ? 'live' : 'demo'}, customer email ${CE.providerFlag(env) || 'off'}, owner login ${OWNER_HASH ? 'on' : 'OFF'})`);
     getStripe().then(st => { if (STRIPE_LIVE && st.status === 'connected' && !st.demo) return ensurePaymentMethodDomain(st.id); }).then(w => { if (w && w.domain) console.log('Apple Pay domain', w.domain.domain, w.domain.enabled ? 'enabled' : 'disabled', 'applePay=' + (w.domain.applePay || 'unknown')); }).catch(e => console.error('Apple Pay domain setup:', e.message));
   });
 }).catch(e => { console.error('Store init failed:', e); process.exit(1); });
-module.exports = { app, ready, store, buildEmail, webhookFields, priceCart, totalsFor, chargeCents, stripeLineParams, summarize, localParts, resolveStripe, ensurePaymentMethodDomain, PAY_DOMAIN, migrateLegacyHours, isLegacyClosedTueHours };
+module.exports = { app, ready, store, buildEmail, webhookFields, priceCart, totalsFor, chargeCents, stripeLineParams, summarize, localParts, resolveStripe, ensurePaymentMethodDomain, PAY_DOMAIN, migrateLegacyHours, isLegacyClosedTueHours, customerEmail };
