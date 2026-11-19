@@ -322,7 +322,7 @@
       <div class="card"><h3>Carryout pickup 🛍️</h3><p class="fine" style="margin:0">Order ahead and pick up at ${esc(s.address)}. Ready in about ${s.pickupMins} min after you pay.</p>
         <label class="f">When<select name="when" data-testid="co-when"><option value="asap">ASAP</option>${laterSlots(s).map(x => `<option>${x}</option>`).join('')}</select></label>${ddBtn(s, 'checkout')}</div>
       <div class="card"><h3>Your info</h3><label class="f">Name<input type="text" name="name" required autocomplete="name" value="${esc(c.name || '')}" data-testid="co-name"></label>
-        <div class="two"><label class="f">Phone<input type="tel" name="phone" required autocomplete="tel" value="${esc(c.phone || '')}" data-testid="co-phone"></label><label class="f">Email<input type="email" name="email" autocomplete="email" value="${esc(c.email || '')}" data-testid="co-email"></label></div>
+        <div class="two"><label class="f">Phone<input type="tel" name="phone" required autocomplete="tel" value="${esc(c.phone || '')}" data-testid="co-phone"></label><label class="f">Email<input type="email" name="email" required autocomplete="email" value="${esc(c.email || '')}" data-testid="co-email"></label></div><p class="fine" style="margin:0">We will email or text you a link to track your order live.</p>
         <label class="f">Order notes<textarea name="notes" rows="2" placeholder="Anything we should know?"></textarea></label></div>
       <div class="card"><h3>Your order</h3>${cartLines()}</div>
       <div class="card"><h3>Tip the crew</h3><div class="tips">${[0, 10, 15, 20].map(p => { const v = r2(t.subtotal * p / 100); return `<button type="button" class="${S.tip === v ? 'on' : ''}" data-act="tip" data-v="${v}">${p ? p + '%' : 'None'}</button>`; }).join('')}</div></div>
@@ -354,7 +354,7 @@
     if (liveCard()) {
       if (!SE) return fail('Card form is still loading.');
       const sub = await SE.els.submit(); if (sub.error) return fail(sub.error.message);
-      const ir = await (await fetch('/api/checkout/intent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: S.cart, tip: S.tip }) })).json();
+      const ir = await (await fetch('/api/checkout/intent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: S.cart, tip: S.tip, when: d.when, customer: { name: d.name, phone: d.phone, email: d.email }, notes: d.notes || '', sid: SID }) })).json();
       if (!ir.ok) return fail(ir.error);
       const cr = await SE.st.confirmPayment({ elements: SE.els, clientSecret: ir.clientSecret, redirect: 'if_required' });
       if (cr.error) return fail(cr.error.message);
@@ -362,7 +362,7 @@
     } else if (hostedCard()) {
       LS.set('ctq_customer', { name: d.name, phone: d.phone, email: d.email });
       LS.set('ctq_pending', { sid: SID, when: d.when, customer: { name: d.name, phone: d.phone, email: d.email }, notes: d.notes || '', tip: S.tip, items: S.cart.map(l => ({ id: l.id, qty: l.qty, mods: l.mods, sel: l.sel, note: l.note })) });
-      let cr; try { cr = await (await fetch('/api/checkout/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: S.cart, tip: S.tip }) })).json(); } catch (e) { return fail('Could not reach us. Check your connection and try again.'); }
+      let cr; try { cr = await (await fetch('/api/checkout/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: S.cart, tip: S.tip, when: d.when, customer: { name: d.name, phone: d.phone, email: d.email }, notes: d.notes || '', sid: SID }) })).json(); } catch (e) { return fail('Could not reach us. Check your connection and try again.'); }
       if (!cr.ok) return fail(cr.error || 'Card payment is not available right now.');
       location.href = cr.url; return;
     } else if (cardOff()) { return fail('Card payments are not set up yet. Please try again later.');
@@ -377,16 +377,16 @@
     const mine = myOrders(); mine[r.id] = r.token; LS.set('ctq_my_orders', mine);
     S.conf[r.id] = r.order;
     if (r.email && r.email.browserSend) { try { const b = r.email.browserSend; if (/^https:\/\/formspree\.io\/f\//.test(b.url)) fetch(b.url, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(b.fields) }); } catch (e) {} }
-    S.cart = []; S.tip = 0; saveCart(); localStorage.removeItem('ctq_pending'); location.hash = '#/order/' + r.id; };
+    S.cart = []; S.tip = 0; saveCart(); localStorage.removeItem('ctq_pending'); location.hash = '#/order/' + r.id + '/' + r.token; };
   // Back from Stripe Checkout: turn the paid session into the order.
   const finishPaid = async () => { const cs = (location.hash.match(/cs=([A-Za-z0-9_]+)/) || [])[1], pend = LS.get('ctq_pending', null);
-    if (!cs || !pend) { location.hash = '#/checkout'; return; }
-    await submitOrder(Object.assign({}, pend, { payment: { method: 'card', session: cs } }), m => { $('#app').innerHTML = header() + `<div class="wrap page"><div class="card"><h3>Payment received, order not saved</h3><p>${esc(m)}</p><p>Please call us so we can sort it out.</p><a class="btn ghost" href="#/">Back to menu</a></div></div>`; }); };
+    if (!cs) { location.hash = '#/checkout'; return; }
+    await submitOrder(Object.assign({}, pend || {}, { payment: { method: 'card', session: cs } }), m => { $('#app').innerHTML = header() + `<div class="wrap page"><div class="card"><h3>Payment received, order not saved</h3><p>${esc(m)}</p><p>Please call us so we can sort it out.</p><a class="btn ghost" href="#/">Back to menu</a></div></div>`; }); };
 
   // Customer confirmation: polls the server so the owner's updates show up live.
   let pollT = null;
-  const loadConf = async id => { const t = myOrders()[id]; if (!t) return; try { const r = await (await fetch('/api/orders/' + encodeURIComponent(id) + '?t=' + t)).json(); if (r.ok) { const was = JSON.stringify(S.conf[id]); S.conf[id] = r.order; if (was !== JSON.stringify(r.order) && location.hash === '#/order/' + id) render(); } } catch (e) {} };
-  const pollConf = id => { clearInterval(pollT); pollT = setInterval(() => { if (location.hash !== '#/order/' + id) return clearInterval(pollT); const o = S.conf[id]; if (o && /completed|canceled/.test(o.status) && !(o.refunded > 0 && o.status !== 'canceled')) return clearInterval(pollT); loadConf(id); }, 6000); };
+  const loadConf = async id => { const t = myOrders()[id]; if (!t) return; try { const r = await (await fetch('/api/orders/' + encodeURIComponent(id) + '?t=' + t)).json(); if (r.ok) { const was = JSON.stringify(S.conf[id]); S.conf[id] = r.order; if (was !== JSON.stringify(r.order) && (location.hash === '#/order/' + id || location.hash.startsWith('#/order/' + id + '/'))) render(); } } catch (e) {} };
+  const pollConf = id => { clearInterval(pollT); pollT = setInterval(() => { if (location.hash !== '#/order/' + id && !location.hash.startsWith('#/order/' + id + '/')) return clearInterval(pollT); const o = S.conf[id]; if (o && /completed|canceled/.test(o.status) && !(o.refunded > 0 && o.status !== 'canceled')) return clearInterval(pollT); loadConf(id); }, 6000); };
   const STATUS = { new: 'Order received', preparing: 'Being made', ready: 'Ready for pickup!', completed: 'Picked up. Enjoy!', canceled: 'Canceled' };
   const confirmation = id => { const o = S.conf[id], s = settings();
     if (!o) { if (myOrders()[id]) { loadConf(id); return header() + '<div class="wrap page"><div class="card">Loading your order...</div></div>'; } return header() + '<div class="wrap page"><div class="card">Order not found. <a href="#/">Menu</a></div></div>'; }
@@ -414,7 +414,12 @@
   let lastRoute = null;
   const render = () => { const h = location.hash || '#/'; let html;
     if (h.startsWith('#/paid')) { $('#app').innerHTML = header() + '<div class="wrap page"><div class="card" data-testid="paying">Finishing your order...</div></div>'; finishPaid(); return; }
-    if (h.startsWith('#/checkout')) html = checkout(); else if (h.startsWith('#/order/')) html = confirmation(h.slice(8)); else html = store();
+    if (h.startsWith('#/checkout')) html = checkout(); else if (h.startsWith('#/order/')) {
+      const m = /^#\/order\/([^/?#]+)(?:\/([^/?#]+))?/.exec(h);
+      const oid = m ? decodeURIComponent(m[1]) : '', tok = m && m[2] ? decodeURIComponent(m[2]) : '';
+      if (oid && tok) { const mine = myOrders(); mine[oid] = tok; LS.set('ctq_my_orders', mine); }
+      html = confirmation(oid);
+    } else html = store();
     if (h.startsWith('#/checkout') && S.cart.length) track('checkout', true);
     const old = $('#co'), keep = old ? [...old.elements].filter(x => x.name && x.type !== 'radio').map(x => [x.name, x.value]) : null;
     const route = h.split('?')[0], sameRoute = route === lastRoute, y = window.scrollY; lastRoute = route;
