@@ -21,7 +21,7 @@
   // First-party analytics only: an anonymous random id per browser, no cookies, no third parties.
   const SID = (() => { let s = LS.get('ctq_sid', ''); if (!/^[a-z0-9]{8,40}$/.test(s)) { s = (Math.random().toString(36).slice(2) + Date.now().toString(36)).slice(0, 20); LS.set('ctq_sid', s); } return s; })();
   const sent = {};
-  const track = (type, once) => { if (once && sent[type]) return; sent[type] = 1; const b = JSON.stringify({ type, sid: SID, path: location.hash.slice(0, 40) });
+  const track = (type, once) => { if (once && sent[type]) return; sent[type] = 1; const b = JSON.stringify({ type, sid: SID, path: location.hash.split('?')[0].slice(0, 40) });
     try { if (navigator.sendBeacon) navigator.sendBeacon('/api/track', new Blob([b], { type: 'application/json' })); else fetch('/api/track', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: b, keepalive: true }); } catch (e) {} };
   const saveCart = () => { try { sessionStorage.setItem('ctq_cart', JSON.stringify(S.cart)); } catch (e) {} LS.set('ctq_mode', S.mode); setTimeout(() => window.dispatchEvent(new Event('ctq-cart')), 0); };
   const toast = t => { const el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => el.hidden = true, 2600); };
@@ -322,7 +322,7 @@
       <div class="card"><h3>Carryout pickup 🛍️</h3><p class="fine" style="margin:0">Order ahead and pick up at ${esc(s.address)}. Ready in about ${s.pickupMins} min after you pay.</p>
         <label class="f">When<select name="when" data-testid="co-when"><option value="asap">ASAP</option>${laterSlots(s).map(x => `<option>${x}</option>`).join('')}</select></label>${ddBtn(s, 'checkout')}</div>
       <div class="card"><h3>Your info</h3><label class="f">Name<input type="text" name="name" required autocomplete="name" value="${esc(c.name || '')}" data-testid="co-name"></label>
-        <div class="two"><label class="f">Phone<input type="tel" name="phone" required autocomplete="tel" value="${esc(c.phone || '')}" data-testid="co-phone"></label><label class="f">Email<input type="email" name="email" autocomplete="email" value="${esc(c.email || '')}" data-testid="co-email"></label></div>
+        <div class="two"><label class="f">Phone<input type="tel" name="phone" required autocomplete="tel" value="${esc(c.phone || '')}" data-testid="co-phone"></label><label class="f">Email<input type="email" name="email" required autocomplete="email" value="${esc(c.email || '')}" data-testid="co-email"></label></div><p class="fine" style="margin:0">We'll email you a link to your order page.</p>
         <label class="f">Order notes<textarea name="notes" rows="2" placeholder="Anything we should know?"></textarea></label></div>
       <div class="card"><h3>Your order</h3>${cartLines()}</div>
       <div class="card"><h3>Tip the crew</h3><div class="tips">${[0, 10, 15, 20].map(p => { const v = r2(t.subtotal * p / 100); return `<button type="button" class="${S.tip === v ? 'on' : ''}" data-act="tip" data-v="${v}">${p ? p + '%' : 'None'}</button>`; }).join('')}</div></div>
@@ -385,11 +385,16 @@
 
   // Customer confirmation: polls the server so the owner's updates show up live.
   let pollT = null;
-  const loadConf = async id => { const t = myOrders()[id]; if (!t) return; try { const r = await (await fetch('/api/orders/' + encodeURIComponent(id) + '?t=' + t)).json(); if (r.ok) { const was = JSON.stringify(S.conf[id]); S.conf[id] = r.order; if (was !== JSON.stringify(r.order) && location.hash === '#/order/' + id) render(); } } catch (e) {} };
-  const pollConf = id => { clearInterval(pollT); pollT = setInterval(() => { if (location.hash !== '#/order/' + id) return clearInterval(pollT); const o = S.conf[id]; if (o && /completed|canceled/.test(o.status) && !(o.refunded > 0 && o.status !== 'canceled')) return clearInterval(pollT); loadConf(id); }, 6000); };
+  // Order page hash: #/order/{id}, or #/order/{id}?t={token} from the email link (lets another device open it).
+  const orderRoute = h => { const m = /^#\/order\/([^/?#&]+)(?:\/([A-Za-z0-9]+))?(?:\?(.*))?$/.exec(h || ''); if (!m) return null; let id = ''; try { id = decodeURIComponent(m[1]); } catch (e) { return null; }
+    const t = m[2] || ((/(?:^|&)t=([A-Za-z0-9]+)/.exec(m[3] || '') || [])[1]) || ''; return { id, t }; };
+  const onOrder = id => { const r = orderRoute(location.hash); return !!r && r.id === String(id); };
+  const notFound = {};
+  const loadConf = async id => { const t = myOrders()[id]; if (!t) return; try { const res = await fetch('/api/orders/' + encodeURIComponent(id) + '?t=' + encodeURIComponent(t)); const r = await res.json(); if (r.ok) { const was = JSON.stringify(S.conf[id]); S.conf[id] = r.order; if (was !== JSON.stringify(r.order) && onOrder(id)) render(); } else if (res.status === 404 && !S.conf[id]) { notFound[id] = 1; if (onOrder(id)) render(); } } catch (e) {} };
+  const pollConf = id => { clearInterval(pollT); pollT = setInterval(() => { if (!onOrder(id)) return clearInterval(pollT); const o = S.conf[id]; if (o && /completed|canceled/.test(o.status) && !(o.refunded > 0 && o.status !== 'canceled')) return clearInterval(pollT); loadConf(id); }, 6000); };
   const STATUS = { new: 'Order received', preparing: 'Being made', ready: 'Ready for pickup!', completed: 'Picked up. Enjoy!', canceled: 'Canceled' };
   const confirmation = id => { const o = S.conf[id], s = settings();
-    if (!o) { if (myOrders()[id]) { loadConf(id); return header() + '<div class="wrap page"><div class="card">Loading your order...</div></div>'; } return header() + '<div class="wrap page"><div class="card">Order not found. <a href="#/">Menu</a></div></div>'; }
+    if (!o) { if (myOrders()[id] && !notFound[id]) { loadConf(id); return header() + '<div class="wrap page"><div class="card">Loading your order...</div></div>'; } return header() + '<div class="wrap page"><div class="card">Order not found. <a href="#/">Menu</a></div></div>'; }
     pollConf(id);
     const st = ['new', 'preparing', 'ready'], k = o.status === 'completed' ? 3 : st.indexOf(o.status), cx = o.status === 'canceled';
     const full = o.refunded > 0 && o.refunded >= o.total - 0.001;
@@ -414,7 +419,9 @@
   let lastRoute = null;
   const render = () => { const h = location.hash || '#/'; let html;
     if (h.startsWith('#/paid')) { $('#app').innerHTML = header() + '<div class="wrap page"><div class="card" data-testid="paying">Finishing your order...</div></div>'; finishPaid(); return; }
-    if (h.startsWith('#/checkout')) html = checkout(); else if (h.startsWith('#/order/')) html = confirmation(h.slice(8)); else html = store();
+    if (h.startsWith('#/checkout')) html = checkout(); else if (h.startsWith('#/order/')) { const r = orderRoute(h) || { id: '', t: '' };
+      if (r.id && r.t) { const mine = myOrders(); if (mine[r.id] !== r.t) { mine[r.id] = r.t; LS.set('ctq_my_orders', mine); delete notFound[r.id]; } }
+      html = confirmation(r.id); } else html = store();
     if (h.startsWith('#/checkout') && S.cart.length) track('checkout', true);
     const old = $('#co'), keep = old ? [...old.elements].filter(x => x.name && x.type !== 'radio').map(x => [x.name, x.value]) : null;
     const route = h.split('?')[0], sameRoute = route === lastRoute, y = window.scrollY; lastRoute = route;
