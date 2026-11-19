@@ -15,7 +15,7 @@
     acceptOrders: true,
     hours: DAYS.map((_, i) => ({ open: '10:00', close: '20:30', closed: i === 0 })) // open Mon-Sat 10:00-20:30 America/Chicago, closed Sunday
   };
-  const S = { menu: null, cfg: { settings: {}, menuEdits: {}, stripe: { mode: 'demo' } }, cart: LS.get('ctq_cart', []), mode: 'pickup', q: '', tip: 0, conf: {} };
+  const S = { menu: null, cfg: { settings: {}, menuEdits: {}, stripe: { mode: 'demo' } }, cart: (function () { try { localStorage.removeItem('ctq_cart'); const v = JSON.parse(sessionStorage.getItem('ctq_cart')); return Array.isArray(v) ? v : []; } catch (e) { return []; } })(), mode: 'pickup', q: '', tip: 0, conf: {} };
   const settings = () => Object.assign({}, DEF_SETTINGS, S.cfg.settings, { name: DEF_SETTINGS.name });
   const myOrders = () => LS.get('ctq_my_orders', {}); // { orderId: token }
   // First-party analytics only: an anonymous random id per browser, no cookies, no third parties.
@@ -23,7 +23,7 @@
   const sent = {};
   const track = (type, once) => { if (once && sent[type]) return; sent[type] = 1; const b = JSON.stringify({ type, sid: SID, path: location.hash.slice(0, 40) });
     try { if (navigator.sendBeacon) navigator.sendBeacon('/api/track', new Blob([b], { type: 'application/json' })); else fetch('/api/track', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: b, keepalive: true }); } catch (e) {} };
-  const saveCart = () => { LS.set('ctq_cart', S.cart); LS.set('ctq_mode', S.mode); setTimeout(() => window.dispatchEvent(new Event('ctq-cart')), 0); };
+  const saveCart = () => { try { sessionStorage.setItem('ctq_cart', JSON.stringify(S.cart)); } catch (e) {} LS.set('ctq_mode', S.mode); setTimeout(() => window.dispatchEvent(new Event('ctq-cart')), 0); };
   const toast = t => { const el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => el.hidden = true, 2600); };
 
   // ---------- menu with owner edits ----------
