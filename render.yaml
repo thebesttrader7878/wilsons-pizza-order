@@ -13,3 +13,7 @@ services:
         sync: false
       - key: ORDER_WEBHOOK_URL
         sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: CUSTOMER_EMAIL_FROM
+        value: "Wilson's Pizza & Grill <orders@wilsonspizzaandgrill.net>"
