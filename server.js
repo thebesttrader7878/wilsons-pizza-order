@@ -8,12 +8,15 @@ const nodemailer = require('nodemailer');
 const makeStore = require('./lib/store');
 const POS = require('./lib/pos');
 const PAY = require('./public/pay.js');
+const CN = require('./lib/customer-notify');
 
 const env = process.env;
 const PORT = env.PORT || 3000;
 const TZ = 'America/Chicago';
 const NAME = "Wilson's Pizza & Grill";
 const SITE_URL = env.SITE_URL || 'https://wilsons-pizza-grill.onrender.com';
+const ADDRESS = CN.DEFAULTS.address;
+const SHOP_PHONE = CN.DEFAULTS.phone;
 const DEFAULT_TO = 'wilsonspizzaandgrill@gmail.com';
 const EMAIL_RE = /^[^\s@<>"',;]+@[^\s@<>"',;]+\.[a-z]{2,}$/i;
 const ENV_TO = (env.ORDER_EMAIL_TO || '').trim();
@@ -106,7 +109,7 @@ const getStripe = async () => resolveStripe(await store.getKV('stripe', { status
 const app = express();
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
-app.use(express.json({ limit: '100kb' }));
+app.use(express.json({ limit: '100kb', verify: (req, res, buf) => { if (req.originalUrl === '/api/stripe/webhook') req.rawBody = buf; } }));
 app.use((req, res, next) => { res.set('X-Content-Type-Options', 'nosniff'); res.set('Referrer-Policy', 'same-origin'); next(); });
 
 const r2 = n => Math.round(n * 100) / 100;
@@ -228,11 +231,116 @@ app.post('/api/checkout/session', async (req, res) => {
     const s = await getSettings(); if (!s.acceptOrders) return res.status(409).json({ ok: false, error: 'We are not taking online orders right now.' });
     const items = priceCart(req.body.items, await getEdits()); if (!items.length) return res.status(400).json({ ok: false, error: 'Your cart is empty.' });
     const t = totalsFor(items, s.taxRate, req.body.tip), lines = stripeLineParams(t, items), amount = lines.total, fee = PLATFORM_FEE_CENTS && PLATFORM_FEE_CENTS < amount ? PLATFORM_FEE_CENTS : 0;
-    const cs = await stripeApi('POST', '/v1/checkout/sessions', Object.assign({ mode: 'payment', success_url: SITE_URL + '/#/paid?cs={CHECKOUT_SESSION_ID}', cancel_url: SITE_URL + '/#/checkout', 'payment_intent_data[description]': NAME + ' pickup order (includes ' + t.taxRate + '% sales tax)', 'payment_intent_data[metadata][subtotal]': t.subtotal.toFixed(2), 'payment_intent_data[metadata][tax]': t.tax.toFixed(2), 'payment_intent_data[metadata][tax_rate]': String(t.taxRate), 'payment_intent_data[metadata][tip]': t.tip.toFixed(2) }, lines.params, fee ? { 'payment_intent_data[application_fee_amount]': String(fee) } : {}), st.id);
+    const c = req.body.customer || {};
+    const email = EMAIL_RE.test(String(c.email || '').trim()) ? String(c.email).trim().slice(0, 120) : '';
+    const pendingId = crypto.randomBytes(12).toString('hex');
+    const csParams = Object.assign({ mode: 'payment', success_url: SITE_URL + '/#/paid?cs={CHECKOUT_SESSION_ID}', cancel_url: SITE_URL + '/#/checkout', 'phone_number_collection[enabled]': 'true', 'metadata[pending]': pendingId, 'payment_intent_data[description]': NAME + ' pickup order (includes ' + t.taxRate + '% sales tax)', 'payment_intent_data[metadata][subtotal]': t.subtotal.toFixed(2), 'payment_intent_data[metadata][tax]': t.tax.toFixed(2), 'payment_intent_data[metadata][tax_rate]': String(t.taxRate), 'payment_intent_data[metadata][tip]': t.tip.toFixed(2), 'payment_intent_data[metadata][pending]': pendingId }, lines.params, fee ? { 'payment_intent_data[application_fee_amount]': String(fee) } : {}, email ? { customer_email: email } : {});
+    const cs = await stripeApi('POST', '/v1/checkout/sessions', csParams, st.id);
+    const pending = { id: pendingId, session: cs.id, items: req.body.items, tip: req.body.tip, when: clean(req.body.when, 40) || 'asap', customer: { name: clean(c.name, 80), phone: clean(c.phone, 30), email }, notes: clean(req.body.notes, 300), sid: /^[a-z0-9]{8,40}$/i.test(String(req.body.sid || '')) ? String(req.body.sid) : '', at: new Date().toISOString() };
+    await store.setKV('pending:' + pendingId, pending);
+    await store.setKV('pendingSession:' + cs.id, pendingId);
     res.json({ ok: true, url: cs.url, id: cs.id, total: t.total });
   } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
 });
 const usedPI = new Set();
+const fulfilling = new Map();
+
+async function findOrderByPayment({ piId, session }) {
+  const recent = await store.listOrders({ from: new Date(Date.now() - 3 * 864e5).toISOString() });
+  return recent.find(x => x.payment && ((piId && x.payment.id === piId) || (session && x.payment.session === session))) || null;
+}
+
+async function notifyOwnerOnce(o) {
+  if (o.ownerNotifiedAt) return { ok: true, skipped: true };
+  const n = await notify(o);
+  o.ownerNotifiedAt = new Date().toISOString();
+  await store.saveOrder(o);
+  return n;
+}
+
+async function notifyCustomerOnce(o) {
+  return CN.notifyCustomer(o, {
+    env, transport, cfg: { name: NAME, address: ADDRESS, phone: SHOP_PHONE, site: SITE_URL },
+    save: ord => store.saveOrder(ord)
+  });
+}
+
+function mergeCustomer(pending, stripeSession) {
+  const c = (pending && pending.customer) || {};
+  const d = (stripeSession && stripeSession.customer_details) || {};
+  const email = EMAIL_RE.test(String(c.email || '').trim()) ? String(c.email).trim().slice(0, 120)
+    : (EMAIL_RE.test(String(d.email || '').trim()) ? String(d.email).trim().slice(0, 120) : '');
+  const phone = clean(c.phone, 30) || clean(d.phone, 30);
+  const name = clean(c.name, 80) || clean(d.name, 80);
+  return { name, phone, email };
+}
+
+async function fulfillPaidOrder({ pending, payment, st, s, stripeSession }) {
+  const customer = mergeCustomer(pending || {}, stripeSession);
+  if (!customer.name || String(customer.phone || '').replace(/\D/g, '').length < 7) throw new Error('Add your name and phone.');
+  const items = priceCart((pending && pending.items) || [], await getEdits()), t = totalsFor(items, s.taxRate, pending && pending.tip);
+  const existing = await findOrderByPayment({ piId: payment.id, session: payment.session });
+  if (existing) {
+    const n = await notifyOwnerOnce(existing);
+    await notifyCustomerOnce(existing);
+    return { order: existing, email: n, existing: true };
+  }
+  const id = String(await store.nextSeq());
+  const created = new Date().toISOString();
+  const o = { id, token: crypto.randomBytes(12).toString('hex'), created, updated: created, status: 'new', mode: 'pickup', when: clean(pending && pending.when, 40) || 'asap',
+    customer, notes: clean(pending && pending.notes, 300),
+    items, ...t, payment, refunds: [], refunded: 0, sid: pending && pending.sid ? pending.sid : '', log: [{ at: created, status: 'new' }] };
+  o.pos = POS.push(s.pos, o);
+  if (payment.id) usedPI.add(payment.id);
+  await store.saveOrder(o);
+  const n = await notifyOwnerOnce(o);
+  await notifyCustomerOnce(o);
+  return { order: o, email: n, existing: false };
+}
+
+async function paymentFromSession(sessionId, t, st) {
+  const cs = await stripeApi('GET', '/v1/checkout/sessions/' + encodeURIComponent(String(sessionId)), null, st.id);
+  if (cs.payment_status !== 'paid') throw Object.assign(new Error('Payment did not go through.'), { status: 402 });
+  const piId = String(cs.payment_intent || '');
+  if (!/^pi_[A-Za-z0-9]+$/.test(piId)) throw new Error('Payment missing.');
+  const existing = await findOrderByPayment({ piId, session: cs.id });
+  if (existing) return { payment: existing.payment, session: cs, existing };
+  if (usedPI.has(piId)) {
+    const again = await findOrderByPayment({ piId, session: cs.id });
+    if (again) return { payment: again.payment, session: cs, existing: again };
+  }
+  const pi = await stripeApi('GET', '/v1/payment_intents/' + encodeURIComponent(piId), null, st.id);
+  if (pi.status !== 'succeeded' || (t && pi.amount !== chargeCents(t).total)) throw Object.assign(new Error('Payment did not go through.'), { status: 402 });
+  usedPI.add(pi.id);
+  const payment = { method: 'card', label: 'Card (Stripe' + (/^sk_test_/.test(env.STRIPE_SECRET_KEY) ? ' test' : '') + ')', id: pi.id, session: cs.id, fee: PAY.cardFee((t && t.total) || pi.amount / 100), live: true, account: st.id, platformFee: (pi.application_fee_amount || 0) / 100 };
+  return { payment, session: cs, existing: null };
+}
+
+async function fulfillBySessionId(sessionId, body) {
+  const st = await getStripe(), s = await getSettings();
+  let pending = body || null;
+  const pendingId = sessionId ? await store.getKV('pendingSession:' + sessionId, null) : null;
+  if (pendingId) {
+    const stored = await store.getKV('pending:' + pendingId, null);
+    if (stored) pending = Object.assign({}, stored, pending || {});
+  }
+  const rawItems = (pending && pending.items) || (body && body.items) || [];
+  if (!rawItems.length) {
+    const cs = await stripeApi('GET', '/v1/checkout/sessions/' + encodeURIComponent(String(sessionId)), null, st.id);
+    const existing = await findOrderByPayment({ piId: String(cs.payment_intent || ''), session: cs.id });
+    if (existing) { const n = await notifyOwnerOnce(existing); await notifyCustomerOnce(existing); return { order: existing, email: n, existing: true }; }
+    throw new Error('Payment received, but the order details were missing. Please call us.');
+  }
+  const items = priceCart(rawItems, await getEdits());
+  const t = totalsFor(items, s.taxRate, pending && pending.tip);
+  const got = await paymentFromSession(sessionId, t, st);
+  if (got.existing) {
+    const n = await notifyOwnerOnce(got.existing);
+    await notifyCustomerOnce(got.existing);
+    return { order: got.existing, email: n, existing: true };
+  }
+  return fulfillPaidOrder({ pending: pending || body, payment: got.payment, st, s, stripeSession: got.session });
+}
 
 const TRACK_TYPES = new Set(['pageview', 'menuview', 'addtocart', 'checkout']);
 const trackHits = new Map();
@@ -264,22 +372,47 @@ const pruneLive = () => { const now = Date.now(); for (const [k, v] of live) if 
 setInterval(pruneLive, 15000).unref();
 
 const orderHits = new Map();
+app.post('/api/stripe/webhook', async (req, res) => {
+  try {
+    const secret = (env.STRIPE_WEBHOOK_SECRET || '').trim();
+    if (!secret) { console.log('[stripe webhook] ignored, STRIPE_WEBHOOK_SECRET not set'); return res.json({ ok: true, ignored: true }); }
+    const raw = req.rawBody || Buffer.from(JSON.stringify(req.body || {}));
+    if (!CN.verifyStripeWebhook(raw, req.headers['stripe-signature'], secret)) return res.status(400).json({ ok: false, error: 'bad signature' });
+    const ev = JSON.parse(Buffer.isBuffer(raw) ? raw.toString('utf8') : raw);
+    if (ev.type !== 'checkout.session.completed' && ev.type !== 'checkout.session.async_payment_succeeded') return res.json({ ok: true, ignored: ev.type });
+    const sess = ev.data && ev.data.object;
+    if (!sess || !sess.id) return res.json({ ok: true, ignored: true });
+    const key = String(sess.id);
+    const run = fulfilling.get(key) || fulfillBySessionId(key, null).finally(() => fulfilling.delete(key));
+    fulfilling.set(key, run);
+    await run.catch(e => console.error('[stripe webhook] fulfill:', e.message));
+    res.json({ ok: true });
+  } catch (e) { console.error('[stripe webhook]', e.message); res.status(500).json({ ok: false }); }
+});
+
 app.post('/api/orders', async (req, res) => {
   const b = req.body || {}; const ip = ipOf(req), now = Date.now();
   const h = (orderHits.get(ip) || []).filter(t => now - t < 600000); if (h.length >= 20) return res.status(429).json({ ok: false, error: 'Too many orders from here, call us instead.' }); h.push(now); orderHits.set(ip, h);
   try {
     const s = await getSettings(); if (!s.acceptOrders) return res.status(409).json({ ok: false, error: 'We are not taking online orders right now.' });
+    const st = await getStripe(); const p = b.payment || {};
+    if (p.method === 'store') return res.status(400).json({ ok: false, error: 'We only take online card payment for carryout orders.' });
+    if (STRIPE_LIVE && st.status === 'connected' && p.session) {
+      const key = String(p.session);
+      const run = fulfilling.get(key) || fulfillBySessionId(key, b).finally(() => fulfilling.delete(key));
+      fulfilling.set(key, run);
+      const out = await run;
+      return res.json(Object.assign({ ok: true, id: out.order.id, token: out.order.token, order: publicOrder(out.order) }, { email: out.email }));
+    }
     const c = b.customer || {}; const name = clean(c.name, 80), phone = clean(c.phone, 30);
     if (!name || phone.replace(/\D/g, '').length < 7) return res.status(400).json({ ok: false, error: 'Add your name and phone.' });
     const items = priceCart(b.items, await getEdits()), t = totalsFor(items, s.taxRate, b.tip);
-    const st = await getStripe(); const p = b.payment || {};
     let payment;
-    if (p.method === 'store') return res.status(400).json({ ok: false, error: 'We only take online card payment for carryout orders.' });
     if (STRIPE_LIVE && st.status === 'connected') {
       let piId = String(p.id || '');
-      if (p.session) { const cs = await stripeApi('GET', '/v1/checkout/sessions/' + encodeURIComponent(String(p.session)), null, st.id); if (cs.payment_status !== 'paid') return res.status(402).json({ ok: false, error: 'Payment did not go through.' }); piId = String(cs.payment_intent || ''); }
       if (!/^pi_[A-Za-z0-9]+$/.test(piId)) return res.status(400).json({ ok: false, error: 'Payment missing.' });
-      if (usedPI.has(piId) || (await store.listOrders({ from: new Date(now - 3 * 864e5).toISOString() })).some(x => x.payment && x.payment.id === piId)) return res.status(409).json({ ok: false, error: 'This payment was already used for an order.' });
+      const existing = await findOrderByPayment({ piId });
+      if (existing) { const n = await notifyOwnerOnce(existing); await notifyCustomerOnce(existing); return res.json(Object.assign({ ok: true, id: existing.id, token: existing.token, order: publicOrder(existing) }, { email: n })); }
       const pi = await stripeApi('GET', '/v1/payment_intents/' + encodeURIComponent(piId), null, st.id);
       if (pi.status !== 'succeeded' || pi.amount !== chargeCents(t).total) return res.status(402).json({ ok: false, error: 'Payment did not go through.' });
       usedPI.add(pi.id); payment = { method: 'card', label: 'Card (Stripe' + (/^sk_test_/.test(env.STRIPE_SECRET_KEY) ? ' test' : '') + ')', id: pi.id, fee: PAY.cardFee(t.total), live: true, account: st.id, platformFee: (pi.application_fee_amount || 0) / 100 };
@@ -287,16 +420,9 @@ app.post('/api/orders', async (req, res) => {
       if (!/^pi_demo_[a-z0-9]{6,20}$/.test(String(p.id || ''))) return res.status(400).json({ ok: false, error: 'Payment missing.' });
       payment = { method: 'card', label: 'Card •••• ' + clean(p.last4, 4).replace(/\D/g, '') + ' (demo)', id: p.id, fee: PAY.cardFee(t.total), demo: true };
     }
-    const id = String(await store.nextSeq());
-    const created = new Date().toISOString();
-    const o = { id, token: crypto.randomBytes(12).toString('hex'), created, updated: created, status: 'new', mode: 'pickup', when: clean(b.when, 40) || 'asap',
-      customer: { name, phone, email: EMAIL_RE.test(String(c.email || '').trim()) ? String(c.email).trim().slice(0, 120) : '' }, notes: clean(b.notes, 300),
-      items, ...t, payment, refunds: [], refunded: 0, sid: /^[a-z0-9]{8,40}$/i.test(String(b.sid || '')) ? b.sid : '', log: [{ at: created, status: 'new' }] };
-    o.pos = POS.push(s.pos, o);
-    await store.saveOrder(o);
-    const n = await notify(o);
-    res.json(Object.assign({ ok: true, id: o.id, token: o.token, order: publicOrder(o) }, { email: n }));
-  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+    const out = await fulfillPaidOrder({ pending: b, payment, st, s, stripeSession: null });
+    res.json(Object.assign({ ok: true, id: out.order.id, token: out.order.token, order: publicOrder(out.order) }, { email: out.email }));
+  } catch (e) { res.status(e.status || 400).json({ ok: false, error: e.message }); }
 });
 
 app.get('/api/orders/:id', async (req, res) => { res.set('Cache-Control', 'no-store');
@@ -487,7 +613,7 @@ app.use('/owner', (req, res, next) => { res.set('X-Robots-Tag', 'noindex, nofoll
 app.get(['/owner', '/owner/'], (req, res) => res.sendFile(path.join(ownerDir, 'index.html')));
 app.use('/owner', express.static(ownerDir));
 app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
-app.get('/healthz', (req, res) => res.json({ ok: true, notify: 'formspree', webhook: WEBHOOK_URL, smtpFallback: smtpReady, store: store.kind, ownerLogin: !!(OWNER_EMAIL && OWNER_HASH), stripe: STRIPE_LIVE ? 'live' : 'demo' }));
+app.get('/healthz', (req, res) => res.json({ ok: true, notify: 'formspree', webhook: WEBHOOK_URL, smtpFallback: smtpReady, customerNotify: CN.providerFlags(env), store: store.kind, ownerLogin: !!(OWNER_EMAIL && OWNER_HASH), stripe: STRIPE_LIVE ? 'live' : 'demo' }));
 app.use('/api', (req, res) => res.status(404).json({ ok: false, error: 'Not found' }));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
@@ -499,4 +625,4 @@ if (require.main === module) ready.then(async () => {
     getStripe().then(st => { if (STRIPE_LIVE && st.status === 'connected' && !st.demo) return ensurePaymentMethodDomain(st.id); }).then(w => { if (w && w.domain) console.log('Apple Pay domain', w.domain.domain, w.domain.enabled ? 'enabled' : 'disabled', 'applePay=' + (w.domain.applePay || 'unknown')); }).catch(e => console.error('Apple Pay domain setup:', e.message));
   });
 }).catch(e => { console.error('Store init failed:', e); process.exit(1); });
-module.exports = { app, ready, store, buildEmail, webhookFields, priceCart, totalsFor, chargeCents, stripeLineParams, summarize, localParts, resolveStripe, ensurePaymentMethodDomain, PAY_DOMAIN, migrateLegacyHours, isLegacyClosedTueHours };
+module.exports = { app, ready, store, buildEmail, webhookFields, priceCart, totalsFor, chargeCents, stripeLineParams, summarize, localParts, resolveStripe, ensurePaymentMethodDomain, PAY_DOMAIN, migrateLegacyHours, isLegacyClosedTueHours, findOrderByPayment, fulfillBySessionId };
