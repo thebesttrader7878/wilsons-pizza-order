@@ -13,25 +13,3 @@ services:
         sync: false
       - key: ORDER_WEBHOOK_URL
         sync: false
-      - key: SMTP_HOST
-        sync: false
-      - key: SMTP_PORT
-        sync: false
-      - key: SMTP_USER
-        sync: false
-      - key: SMTP_PASS
-        sync: false
-      - key: RESEND_API_KEY
-        sync: false
-      - key: RESEND_FROM
-        sync: false
-      - key: TWILIO_ACCOUNT_SID
-        sync: false
-      - key: TWILIO_AUTH_TOKEN
-        sync: false
-      - key: TWILIO_FROM
-        sync: false
-      - key: STRIPE_WEBHOOK_SECRET
-        sync: false
-      - key: CUSTOMER_EMAIL_FROM
-        sync: false
