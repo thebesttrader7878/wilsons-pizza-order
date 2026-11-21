@@ -13,6 +13,7 @@ const CE = require('./lib/customer-email');
 const env = process.env;
 const PORT = env.PORT || 3000;
 const TZ = 'America/Chicago';
+const HOURS = require('./lib/hours');
 const NAME = "Wilson's Pizza & Grill";
 const SITE_URL = env.SITE_URL || 'https://wilsons-pizza-grill.onrender.com';
 const DEFAULT_TO = 'wilsonspizzaandgrill@gmail.com';
@@ -218,7 +219,9 @@ app.get('/api/site', async (req, res) => { const s = await getSettings(), st = a
 // Live mode only: create a PaymentIntent on the owner's connected account (direct charge).
 app.post('/api/checkout/intent', async (req, res) => {
   try { const st = await getStripe(); if (!STRIPE_LIVE || st.status !== 'connected') return res.status(400).json({ ok: false, error: 'Card payments are in demo mode.' });
-    const s = await getSettings(), items = priceCart(req.body.items, await getEdits()), t = totalsFor(items, s.taxRate, req.body.tip);
+    const s = await getSettings(); if (!s.acceptOrders) return res.status(409).json({ ok: false, error: 'We are not taking online orders right now.' });
+    if (!HOURS.isOpen(s.hours)) return res.status(409).json({ ok: false, closed: true, error: HOURS.closedMessage(s.hours) });
+    const items = priceCart(req.body.items, await getEdits()), t = totalsFor(items, s.taxRate, req.body.tip);
     const amount = chargeCents(t).total, fee = PLATFORM_FEE_CENTS && PLATFORM_FEE_CENTS < amount ? PLATFORM_FEE_CENTS : 0;
     const pi = await stripeApi('POST', '/v1/payment_intents', Object.assign({ amount, currency: 'usd', 'automatic_payment_methods[enabled]': 'true', description: NAME + ' pickup order (includes ' + t.taxRate + '% sales tax)', 'metadata[subtotal]': t.subtotal.toFixed(2), 'metadata[tax]': t.tax.toFixed(2), 'metadata[tax_rate]': String(t.taxRate), 'metadata[tip]': t.tip.toFixed(2) }, fee ? { application_fee_amount: String(fee) } : {}), st.id);
     res.json({ ok: true, clientSecret: pi.client_secret, id: pi.id, total: t.total });
@@ -229,6 +232,7 @@ app.post('/api/checkout/intent', async (req, res) => {
 app.post('/api/checkout/session', async (req, res) => {
   try { const st = await getStripe(); if (!STRIPE_LIVE || st.status !== 'connected') return res.status(400).json({ ok: false, error: 'Card payments are not set up yet. Please try again later.' });
     const s = await getSettings(); if (!s.acceptOrders) return res.status(409).json({ ok: false, error: 'We are not taking online orders right now.' });
+    if (!HOURS.isOpen(s.hours)) return res.status(409).json({ ok: false, closed: true, error: HOURS.closedMessage(s.hours) });
     const items = priceCart(req.body.items, await getEdits()); if (!items.length) return res.status(400).json({ ok: false, error: 'Your cart is empty.' });
     const t = totalsFor(items, s.taxRate, req.body.tip), lines = stripeLineParams(t, items), amount = lines.total, fee = PLATFORM_FEE_CENTS && PLATFORM_FEE_CENTS < amount ? PLATFORM_FEE_CENTS : 0;
     const cs = await stripeApi('POST', '/v1/checkout/sessions', Object.assign({ mode: 'payment', success_url: SITE_URL + '/#/paid?cs={CHECKOUT_SESSION_ID}', cancel_url: SITE_URL + '/#/checkout', 'payment_intent_data[description]': NAME + ' pickup order (includes ' + t.taxRate + '% sales tax)', 'payment_intent_data[metadata][subtotal]': t.subtotal.toFixed(2), 'payment_intent_data[metadata][tax]': t.tax.toFixed(2), 'payment_intent_data[metadata][tax_rate]': String(t.taxRate), 'payment_intent_data[metadata][tip]': t.tip.toFixed(2) }, lines.params, fee ? { 'payment_intent_data[application_fee_amount]': String(fee) } : {}), st.id);
@@ -287,6 +291,7 @@ app.post('/api/orders', async (req, res) => {
       if (pi.status !== 'succeeded' || pi.amount !== chargeCents(t).total) return res.status(402).json({ ok: false, error: 'Payment did not go through.' });
       usedPI.add(pi.id); payment = { method: 'card', label: 'Card (Stripe' + (/^sk_test_/.test(env.STRIPE_SECRET_KEY) ? ' test' : '') + ')', id: pi.id, fee: PAY.cardFee(t.total), live: true, account: st.id, platformFee: (pi.application_fee_amount || 0) / 100 };
     } else {
+      if (!HOURS.isOpen(s.hours)) return res.status(409).json({ ok: false, closed: true, error: HOURS.closedMessage(s.hours) });
       if (!/^pi_demo_[a-z0-9]{6,20}$/.test(String(p.id || ''))) return res.status(400).json({ ok: false, error: 'Payment missing.' });
       payment = { method: 'card', label: 'Card •••• ' + clean(p.last4, 4).replace(/\D/g, '') + ' (demo)', id: p.id, fee: PAY.cardFee(t.total), demo: true };
     }

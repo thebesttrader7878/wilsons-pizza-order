@@ -33,6 +33,7 @@
   const kc = () => { const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date()).map(x => [x.type, x.value])); return { day: DAYS.indexOf(p.weekday), t: p.hour + ':' + p.minute }; };
   const openNow = (s = settings()) => { const k = kc(), h = s.hours[k.day]; if (!h || h.closed) return false; return k.t >= h.open && k.t < h.close; };
   const fmtT = t => { let [h, mm] = t.split(':').map(Number); const ap = h >= 12 ? 'pm' : 'am'; h = h % 12 || 12; return h + (mm ? ':' + String(mm).padStart(2, '0') : '') + ap; };
+  const nextOpen = (s = settings()) => { const k = kc(); for (let i = 0; i < 8; i++) { const d = (k.day + i) % 7, h = s.hours[d]; if (!h || h.closed) continue; if (i === 0 && k.t >= h.open) continue; return (i === 0 ? 'today' : i === 1 ? 'tomorrow' : ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d]) + ' at ' + fmtT(h.open); } return ''; };
   const todayHours = (s = settings()) => { const h = s.hours[kc().day]; return h.closed ? 'Closed today' : fmtT(h.open) + ' to ' + fmtT(h.close); };
 
   // ---------- pricing ----------
@@ -214,7 +215,7 @@
     return header() + shipTop() + `<section class="hero"><div class="wrap">${mosaic()}<div class="hcopy">
       <img class="hlogo" src="/img/logo.png" alt="Wilson's Pizza &amp; Grill" data-testid="hero-logo">
       <p class="hname" data-testid="hero-name">Order ahead for pickup</p>
-      <div class="chips"><span class="chip ${open && s.acceptOrders ? 'open' : 'closed'}" data-testid="openchip"><i class="dot"></i>${open && s.acceptOrders ? 'Open now · accepting orders' : 'Kitchen closed · still order ahead'}</span><span class="chip">🕙 ${todayHours(s)}</span><span class="chip">📍 Quindaro, KCK</span></div>
+      <div class="chips"><span class="chip ${open && s.acceptOrders ? 'open' : 'closed'}" data-testid="openchip"><i class="dot"></i>${open && s.acceptOrders ? 'Open now · accepting orders' : !s.acceptOrders ? 'Not taking online orders right now' : 'Closed now' + (nextOpen(s) ? ' · orders open ' + nextOpen(s) : '')}</span><span class="chip">🕙 ${todayHours(s)}</span><span class="chip">📍 Quindaro, KCK</span></div>
       <h1>Order ahead.<br>Pick up hot.<br><em>Made for the creek.</em></h1>
       <p>Carryout from ${esc(s.address.split(',')[0])} — tap to order, we fire it when you pay. Ready in about ${s.pickupMins} min when you pull up.</p>
       ${shipHero()}
@@ -332,7 +333,8 @@
         <div id="cardbox">${cardOff() ? '' : liveCard() ? '<div id="stripe-el" data-testid="stripe-element"></div>' : hostedCard() ? '<p class="fine" data-testid="hosted-card">🔒 You\'ll enter your card on Stripe\'s secure checkout page, then come right back here.</p>' : `<label class="f">Card number<input type="text" name="card" inputmode="numeric" value="4242 4242 4242 4242" data-testid="co-card"></label><div class="two"><label class="f">Exp<input type="text" name="exp" value="12/30"></label><label class="f">CVC<input type="text" name="cvc" value="123"></label></div><p class="fine">Demo mode. Use 4242 4242 4242 4242. Nothing is charged.</p>`}</div>
         <div id="payerr" class="req" hidden></div>
         ${sumHtml(t)}
-        <button class="btn block" data-testid="placeorder" ${belowMin || !s.acceptOrders || cardOff() ? 'disabled' : ''}>${!s.acceptOrders ? 'Not taking online orders right now' : cardOff() ? 'Card payments not available yet' : 'Pay & place pickup order · ' + m(t.total)}</button></div>
+        ${s.acceptOrders && !openNow(s) ? `<p class="req" data-testid="closed-note">We're closed right now, so online ordering is paused.${nextOpen(s) ? ' Orders open ' + nextOpen(s) + '.' : ''}</p>` : ''}
+        <button class="btn block" data-testid="placeorder" ${belowMin || !s.acceptOrders || !openNow(s) || cardOff() ? 'disabled' : ''}>${!s.acceptOrders ? 'Not taking online orders right now' : !openNow(s) ? 'Closed right now' : cardOff() ? 'Card payments not available yet' : 'Pay & place pickup order · ' + m(t.total)}</button></div>
       </form></div>`; };
   const laterSlots = s => { const k = kc(), h = s.hours[k.day]; if (!h || h.closed) return []; const toMin = t => { const p = t.split(':').map(Number); return p[0] * 60 + p[1]; }; const toT = m => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); let m = Math.ceil((toMin(k.t) + 30) / 15) * 15; const end = toMin(h.close), start = toMin(h.open), out = []; for (let i = 0; i < 24 && m < end; i++, m += 15) { if (m >= start) out.push('Today ' + fmtT(toT(m))); } return out; };
 
